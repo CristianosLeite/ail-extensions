@@ -1,0 +1,42 @@
+{
+  "name": "ail",
+  "displayName": "AIL",
+  "description": "AIL sources (.aw): syntax highlighting, block folding and formatting with build/tools/indent",
+  "version": "0.1.0",
+  "publisher": "ail",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages", "Formatters"],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "ail",
+        "aliases": ["AIL", "ail"],
+        "extensions": [".aw"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      { "language": "ail", "scopeName": "source.ail", "path": "./syntaxes/ail.tmLanguage.json" }
+    ],
+    "configuration": {
+      "title": "AIL",
+      "properties": {
+        "ail.indentPath": {
+          "type": "string",
+          "default": "build/tools/indent",
+          "scope": "machine-overridable",
+          "description": "The formatter, build/tools/indent of the AIL repository (make tools builds it). A relative path starts at the workspace folder of the file."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "[ail]": {
+        "editor.tabSize": 2,
+        "editor.insertSpaces": false,
+        "editor.detectIndentation": false,
+        "editor.defaultFormatter": "ail.ail"
+      }
+    }
+  }
+}

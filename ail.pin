@@ -1,0 +1,8 @@
+# The main repository of AIL, whose sources and formatter the checks of
+# the extensions read: where it is published, and the revision this
+# repository was last checked against.
+#
+#   url revision
+#
+# tools/ail.sh clones it into ail/, which git ignores, at that revision.
+https://github.com/CristianosLeite/ail.git b8a090e81b8c5936b0dae42e541b36ed30bf828d

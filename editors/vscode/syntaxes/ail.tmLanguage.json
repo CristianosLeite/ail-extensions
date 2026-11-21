@@ -1,0 +1,119 @@
+{
+  "name": "AIL",
+  "scopeName": "source.ail",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#assignment" },
+    { "include": "#use" },
+    { "include": "#function" },
+    { "include": "#callee" },
+    { "include": "#label" },
+    { "include": "#jump" },
+    { "include": "#sys" },
+    { "include": "#control" },
+    { "include": "#declaration" },
+    { "include": "#statement" },
+    { "include": "#as" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.ail",
+      "match": "#.*$"
+    },
+    "assignment": {
+      "comment": "a name with = or an operator and = right behind it is a variable, also when it is spelled like a keyword",
+      "match": "^[ \\t]*([a-z][a-z0-9_]*)(=(?!=)|(?:<<|>>|[*/%+\\-&^|])=)",
+      "captures": {
+        "1": { "name": "variable.other.ail" },
+        "2": { "name": "keyword.operator.assignment.ail" }
+      }
+    },
+    "use": {
+      "comment": "the path of a use has no escapes and ends on its line, with or without its quote",
+      "begin": "^[ \\t]*(use)(?=[ \\t\\r#]|$)",
+      "end": "$",
+      "beginCaptures": { "1": { "name": "storage.type.ail" } },
+      "patterns": [
+        { "match": "\"[^\"]*(\"|$)", "name": "string.quoted.double.ail" },
+        { "include": "#comment" }
+      ]
+    },
+    "function": {
+      "match": "^[ \\t]*(?:(async)[ \\t]+)?(fn)[ \\t]+([a-z][a-z0-9_]*)",
+      "captures": {
+        "1": { "name": "storage.modifier.ail" },
+        "2": { "name": "storage.type.function.ail" },
+        "3": { "name": "entity.name.function.ail" }
+      }
+    },
+    "callee": {
+      "match": "^[ \\t]*(call|tail|ref|spawn)(?=[ \\t\\r#]|$)(?:[ \\t]+([a-z][a-z0-9_]*))?",
+      "captures": {
+        "1": { "name": "keyword.other.ail" },
+        "2": { "name": "entity.name.function.ail" }
+      }
+    },
+    "label": {
+      "match": "^[ \\t]*(label)[ \\t]+([a-z][a-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.control.ail" },
+        "2": { "name": "entity.name.label.ail" }
+      }
+    },
+    "jump": {
+      "comment": "the last word of a jump is its label",
+      "begin": "^[ \\t]*(jmp|jz|jnz|jeq|jne|jlt|jle|jgt|jge|jslt|jsle|jsgt|jsge)(?=[ \\t\\r#]|$)",
+      "end": "(?=#)|$",
+      "beginCaptures": { "1": { "name": "keyword.control.ail" } },
+      "patterns": [
+        { "match": "\\b([a-z][a-z0-9_]*)(?=[ \\t\\r]*(#|$))", "name": "entity.name.label.ail" },
+        { "include": "#string" },
+        { "include": "#number" },
+        { "include": "#operator" }
+      ]
+    },
+    "sys": {
+      "match": "^[ \\t]*(sys)(?=[ \\t\\r#]|$)(?:[ \\t]+([a-z][a-z0-9_]*))?",
+      "captures": {
+        "1": { "name": "keyword.other.ail" },
+        "2": { "name": "support.function.ail" }
+      }
+    },
+    "control": {
+      "match": "^[ \\t]*(if|ifz|ifeq|ifne|iflt|ifle|ifgt|ifge|ifslt|ifsle|ifsgt|ifsge|while|else|end|ret|await|join)(?=[ \\t\\r#]|$)",
+      "captures": { "1": { "name": "keyword.control.ail" } }
+    },
+    "declaration": {
+      "match": "^[ \\t]*(var|const|buf|data|local|args)(?=[ \\t\\r#]|$)",
+      "captures": { "1": { "name": "storage.type.ail" } }
+    },
+    "statement": {
+      "match": "^[ \\t]*(set|add|sub|mul|div|mod|and|or|xor|shl|shr|sdiv|smod|sar|eq|ne|lt|le|gt|ge|slt|sle|sgt|sge|fadd|fsub|fmul|fdiv|fsqrt|itof|ftoi|flt|fle|feq|fsum|fdot|padd|psub|pmul|pdiv|pmadd|xadd|cas|alloc|free|len|at|load|load4|load2|loadb|store|store4|store2|storeb|callp)(?=[ \\t\\r#]|$)",
+      "captures": { "1": { "name": "keyword.other.ail" } }
+    },
+    "as": {
+      "match": "(?<=[ \\t])as(?=[ \\t])",
+      "name": "keyword.operator.word.ail"
+    },
+    "string": {
+      "name": "string.quoted.double.ail",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "match": "\\\\x[0-9a-fA-F]{2}", "name": "constant.character.escape.ail" },
+        { "match": "\\\\.", "name": "constant.character.escape.ail" }
+      ]
+    },
+    "number": {
+      "match": "(?<![a-z0-9_])-?(0x[0-9a-fA-F]+|[0-9]+)(?![a-z0-9_])",
+      "name": "constant.numeric.ail"
+    },
+    "operator": {
+      "match": "==|!=|<=|>=|<<|>>|[*/%+\\-&^|<>]",
+      "name": "keyword.operator.ail"
+    }
+  }
+}
