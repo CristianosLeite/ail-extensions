@@ -4,7 +4,7 @@ Extensions for [AIL](https://github.com/CristianosLeite/ail), a programming lang
 
 ## Modules
 
-- `editors/`: support for AIL sources (`.aw`) in editors, one directory an editor
+- `editors/`: support for AIL sources (`.aiw`) in editors, one directory an editor
   - [`editors/vscode/`](editors/vscode/README.md): VS Code: syntax highlighting, folding of the blocks, and Format Document through the formatter of the language. Plain JavaScript, nothing to build; its README says how to install it
 
 ## Checks

@@ -7,7 +7,7 @@
 //
 // For each line that is no part of a string that began on a line before,
 // read here without the grammar:
-//   - a first word that is a statement of compiler/tables.aw, with a
+//   - a first word that is a statement of compiler/tables.aiw, with a
 //     blank, a comment or the end of the line behind it, must get a scope
 //     of a keyword or a storage word, and every statement of the table
 //     must be met in some source;
@@ -46,7 +46,7 @@ function wasm() {
 function statements() {
   const out = new Set();
   let on = false;
-  for (const line of fs.readFileSync(path.join(root, 'compiler', 'tables.aw'), 'utf8').split('\n')) {
+  for (const line of fs.readFileSync(path.join(root, 'compiler', 'tables.aiw'), 'utf8').split('\n')) {
     if (line.startsWith('data optab ')) on = true;
     else if (!line.startsWith('data ') || /^data [a-z]/.test(line)) on = false;
     if (!on) continue;

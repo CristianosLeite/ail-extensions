@@ -6,7 +6,7 @@ status: current
 ---
 # Grammar check
 
-**Summary.** `make check` colours every `.aw` source of the main repository with the grammar,
+**Summary.** `make check` colours every `.aiw` source of the main repository with the grammar,
 using the runtime and the libraries of an installed VS Code and no window, and compares the
 folds with the formatter. On 2026-11-21, against revision b8a090e linked as a checkout, it
 reported 1207 sources, 44010 lines, 87 statements, 0 wrong.
@@ -15,7 +15,7 @@ reported 1207 sources, 44010 lines, 87 statements, 0 wrong.
 - **The editor's own libraries** (`vscode-textmate`, `vscode-oniguruma`, through
   `ELECTRON_RUN_AS_NODE=1`): another implementation of TextMate grammars could colour
   otherwise, and the machine it was written on has no `node`.
-- **The statements come from `compiler/tables.aw`**, not from a list here, and each must be
+- **The statements come from `compiler/tables.aiw`**, not from a list here, and each must be
   met in some source, so a statement the grammar does not know fails the check.
 - **Run by hand, not by a test suite of the main repository:** it needs an installed editor.
 
