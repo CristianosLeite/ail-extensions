@@ -14,7 +14,7 @@ cd "$(dirname "$0")/.." || exit 1
 die() { echo "ail: $*" >&2; exit 1; }
 
 if [ $# -gt 0 ]; then
-    [ -f "$1/compiler/ailc.aw" ] || die "no AIL repository at $1"
+    [ -f "$1/compiler/ailc.aiw" ] || die "no AIL repository at $1"
     [ ! -e ail ] || [ -L ail ] || die "ail is a clone; remove it to use $1"
     ln -sfn "$(cd "$1" && pwd)" ail || exit 1
 elif [ ! -L ail ]; then
@@ -31,4 +31,4 @@ elif [ ! -L ail ]; then
         git -C ail checkout -q --detach "$rev" || die "$url has no revision $rev"
     fi
 fi
-[ -f ail/compiler/ailc.aw ] || die "ail is no AIL repository"
+[ -f ail/compiler/ailc.aiw ] || die "ail is no AIL repository"

@@ -1,8 +1,8 @@
 {
   "name": "ail",
   "displayName": "AIL",
-  "description": "AIL sources (.aw): syntax highlighting, block folding and formatting with build/tools/indent",
-  "version": "0.1.0",
+  "description": "AIL sources (.aiw): syntax highlighting, block folding and formatting with build/tools/indent",
+  "version": "0.2.0",
   "publisher": "ail",
   "license": "MIT",
   "engines": { "vscode": "^1.75.0" },
@@ -13,7 +13,7 @@
       {
         "id": "ail",
         "aliases": ["AIL", "ail"],
-        "extensions": [".aw"],
+        "extensions": [".aiw"],
         "configuration": "./language-configuration.json"
       }
     ],

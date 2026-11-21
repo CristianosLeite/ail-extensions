@@ -19,5 +19,5 @@ fi
 top=$PWD
 [ -x ail/build/tools/indent ] || { echo "check.sh: no ail/build/tools/indent; run make check" >&2; exit 1; }
 cd ail || exit 1
-git ls-files -z '*.aw' |
+git ls-files -z '*.aiw' |
     ELECTRON_RUN_AS_NODE=1 xargs -0 "$code" "$top/editors/vscode/test/check.js" "$(dirname "$code")/resources/app"

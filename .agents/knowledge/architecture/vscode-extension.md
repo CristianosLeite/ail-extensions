@@ -6,7 +6,7 @@ status: current
 ---
 # VS Code extension
 
-**Summary.** `editors/vscode/` colours `.aw` files with a TextMate grammar, folds their
+**Summary.** `editors/vscode/` colours `.aiw` files with a TextMate grammar, folds their
 blocks and formats them through `build/tools/indent` of the workspace. It is plain
 JavaScript with no build step and no dependency.
 
@@ -17,7 +17,7 @@ JavaScript with no build step and no dependency.
   workspace folder of the file, so the editor and `make test` of the main repository cannot
   disagree. The setting `ail.indentPath` names another place. A workspace without the tool
   built gets a message, not a guess.
-- **Folding repeats two rules of `tools/lib/dent.aw`** (`dtkind`, `dtstrend`) in
+- **Folding repeats two rules of `tools/lib/dent.aiw`** (`dtkind`, `dtstrend`) in
   `extension.js`, since folding must work without the tool. The check compares the folds with
   the tool on every source.
 - **A tab is shown two columns wide**; sources are indented with one tab a block because that

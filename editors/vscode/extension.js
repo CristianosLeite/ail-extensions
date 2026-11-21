@@ -7,7 +7,7 @@ const path = require('path');
 const OPENERS = new Set(['fn', 'async', 'while', 'if', 'ifz', 'ifeq', 'ifne', 'iflt',
   'ifle', 'ifgt', 'ifge', 'ifslt', 'ifsle', 'ifsgt', 'ifsge']);
 
-// What a line does to the depth, as dtkind in tools/lib/dent.aw has it: 1 it
+// What a line does to the depth, as dtkind in tools/lib/dent.aiw has it: 1 it
 // opens a block, 2 it is else, 3 it is end, 0 anything else. The first
 // word counts only when a blank, a comment or the end of the line follows.
 function kind(line) {
@@ -18,7 +18,7 @@ function kind(line) {
   return OPENERS.has(m[1]) ? 1 : 0;
 }
 
-// Whether a line ends inside a string, as dtstrend in tools/lib/dent.aw.
+// Whether a line ends inside a string, as dtstrend in tools/lib/dent.aiw.
 function strend(line, s) {
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
