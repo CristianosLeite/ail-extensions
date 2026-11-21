@@ -4,6 +4,7 @@
   "description": "AIL sources (.aw): syntax highlighting, block folding and formatting with build/tools/indent",
   "version": "0.1.0",
   "publisher": "ail",
+  "license": "MIT",
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Programming Languages", "Formatters"],
   "main": "./extension.js",

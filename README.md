@@ -23,3 +23,7 @@ The checks compare an extension with the language itself, so they need the main 
 - `editors/vscode/`: the extension (`package.json`, `extension.js`, the grammar in `syntaxes/`, `language-configuration.json`), `check.sh` and `test/check.js`
 - `tools/ail.sh`, `ail.pin`: the main repository at `ail/`
 - `AGENTS.md`, `.agents/knowledge/`: guidance and notes for AI coding agents
+
+## License
+
+[MIT](LICENSE).
