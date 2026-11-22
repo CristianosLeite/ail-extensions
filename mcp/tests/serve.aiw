@@ -38,6 +38,22 @@ async fn add x p n r
 	call jsonget p n "b" as v vn k
 	call numint v vn as b ok2
 	await asyncsleep 5
+	if x>100
+		# an object in x-1 arrays in an object: x levels
+		call byadd r+24 "{\"deep\":"
+		i=1
+		while i<x
+			call byaddb r+24 91
+			i+=1
+		end
+		i=1
+		while i<x
+			call byaddb r+24 93
+			i+=1
+		end
+		call byaddb r+24 125
+		ret 0
+	end
 	if x==2
 		# a result that is no object
 		call byadd r+24 "[1]"
@@ -182,6 +198,13 @@ call print "> the same with the id 45, a byte at a time\n"
 call asyncwriteall w "\n" as h
 await h as r
 call hear
+# a structured result nested 126 deep is sent, since the response adds
+# two levels; one of 127 is refused
+store server+64 126
+call ask "{\"jsonrpc\":\"2.0\",\"id\":50,\"method\":\"tools/call\",\"params\":{\"name\":\"add\",\"arguments\":{\"a\":1,\"b\":1}}}"
+store server+64 127
+call ask "{\"jsonrpc\":\"2.0\",\"id\":51,\"method\":\"tools/call\",\"params\":{\"name\":\"add\",\"arguments\":{\"a\":1,\"b\":1}}}"
+store server+64 0
 call say "   "
 call say "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"ping\"}"
 call hear

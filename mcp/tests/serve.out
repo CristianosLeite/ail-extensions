@@ -18,7 +18,7 @@
 > {"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"add","arguments":[1,2]}}
 < {"jsonrpc":"2.0","id":8,"error":{"code":-32602,"message":"The arguments of a tool are an object"}}
 > {"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"add","arguments":{"a":1,"b":1}}}
-< {"jsonrpc":"2.0","id":9,"error":{"code":-32603,"message":"The structured result of the tool is no JSON object"}}
+< {"jsonrpc":"2.0","id":9,"error":{"code":-32603,"message":"The structured result of the tool is no JSON object, or is nested too deep"}}
 > {"jsonrpc":"2.0","id":10,"method":"resources/list"}
 < {"jsonrpc":"2.0","id":10,"error":{"code":-32601,"message":"Method not found: resources/list"}}
 > {"jsonrpc":"2.0","id":11,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
@@ -73,6 +73,10 @@
 < {"jsonrpc":"2.0","id":44,"error":{"code":-32602,"message":"The params of initialize are a protocolVersion, capabilities and a clientInfo with a name and a version"}}
 > the same with the id 45, a byte at a time
 < {"jsonrpc":"2.0","id":45,"result":{}}
+> {"jsonrpc":"2.0","id":50,"method":"tools/call","params":{"name":"add","arguments":{"a":1,"b":1}}}
+< {"jsonrpc":"2.0","id":50,"result":{"content":[{"type":"text","text":"{\"deep\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}"}],"structuredContent":{"deep":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]},"isError":false}}
+> {"jsonrpc":"2.0","id":51,"method":"tools/call","params":{"name":"add","arguments":{"a":1,"b":1}}}
+< {"jsonrpc":"2.0","id":51,"error":{"code":-32603,"message":"The structured result of the tool is no JSON object, or is nested too deep"}}
 >    
 > {"jsonrpc":"2.0","id":14,"method":"ping"}
 < {"jsonrpc":"2.0","id":14,"result":{}}

@@ -62,6 +62,16 @@ word. It is on the branch `mcp`, which is not pushed.
   `mcp/tests/no_memory.aiw` limits the memory to 64 MiB and calls a tool that adds 24
   MiB of text: the server writes nothing of that response and ends with -12, the
   request before it answered. Still without a test: a write of a response that fails.
+- **The third review of the pull request 2** (Copilot, 2026-11-22, three findings, all
+  taken): a structured result may be nested 126 deep, since the response puts it two
+  levels down and is itself read as JSON before it is written (`mcpdepth`); every task
+  and event is awaited by a handle that was looked at, 0 being -12, the handler of a
+  tool and the reads and writes of `mcpserve` included; and `mcpline` says whether its
+  line is to have a response, so that a response that is due and of no bytes, for want
+  of memory for the first of them, ends the server with -12 and is not taken for a
+  notification. `mcp/tests/no_memory.aiw` has the last: a server that waits for its
+  first request while the memory is taken whole ends with -12, where before the fix it
+  went on waiting.
 
 ## Unchecked
 - A real client. The test is a session written from the specification; aildb plans to
