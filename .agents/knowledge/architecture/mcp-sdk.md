@@ -16,9 +16,11 @@ word. It is on the branch `mcp`, which is not pushed.
   2026-11-22): "let us write the SDK in AIL, use the one of Rust as the reference", and
   "the MCP SDK is a module of ail-extensions"; JSON, numbers and HTTP are libraries of
   AIL itself.
-- **It is a package of AIL, with its own `Ailfile`** (agent): a program names it as a
-  dependency and reads `mcp:src/mcp.aiw`. The repository itself still pins AIL in
-  `ail.pin`; only this module is a package.
+- **It is a directory of the package that the repository is** (2026-11-22; first a
+  package of its own, `mcp/Ailfile`, which no program could name by an address): a
+  program names `ail-extensions` as a dependency and reads
+  `ail-extensions:mcp/src/mcp.aiw`; its tests are `tests/mcp_*.aiw` of the package
+  ([the link to the main repository](modules-and-link.md)).
 - **What of rmcp is here** (agent): `ServerInfo` and `Tool` as bytes the program owns,
   a handler for each tool, `CallToolResult::success`, `::error` and `::structured` as
   `mcptext`, `mcpfail` and a buffer for JSON, the codes of `ErrorData`, and
@@ -76,5 +78,5 @@ word. It is on the branch `mcp`, which is not pushed.
 ## Unchecked
 - A real client. The test is a session written from the specification; aildb plans to
   ask its server from Claude Code and Codex.
-- `make mcp-check` with the revision of `ail.pin`, which has not the libraries the SDK
-  needs: it was run with the command of a checkout of AIL at its branch `net-json`.
+- `make test` with a released AIL: the libraries the SDK needs came after the tag
+  `v0.1.0`, so it was run with the command of a checkout of AIL at its branch `net-json`.

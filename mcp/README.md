@@ -16,7 +16,7 @@ It is the server side and tools only: `initialize`, `ping`, `tools/list` and `to
 
 ## Using it
 
-It needs an AIL that has `lib/std/json.aiw`, `lib/std/num.aiw` and the async library. A program names the package in its `Ailfile` (`ail add --path <this directory>`) and:
+It needs an AIL that has `lib/std/json.aiw`, `lib/std/num.aiw` and the async library. A program names the package of this repository in its `Ailfile` (`ail add --path <the top of this repository>`, or its address and a version once one is tagged) and:
 
 ```
 use "lib/std/io.aiw"
@@ -25,7 +25,7 @@ use "lib/std/json.aiw"
 use "lib/async/task.aiw"
 use "lib/async/time.aiw"
 use "lib/async/io.aiw"
-use "mcp:src/mcp.aiw"
+use "ail-extensions:mcp/src/mcp.aiw"
 buf server 80
 buf tools 72
 data schema "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}"
@@ -60,9 +60,11 @@ The head of `src/mcp.aiw` has every field and rule. A handler gets its arguments
 
 ## Checking it
 
+At the top of the repository, which is the package:
+
 ```
-ail test          # tests/serve.aiw: a session, line by line
+ail test          # tests/mcp_serve.aiw, a session line by line, and tests/mcp_no_memory.aiw
 ail fmt --check
 ```
 
-`make mcp-check` at the top of the repository runs both with the command `ail` of the main repository at `ail/`, which must be one that has the libraries above.
+`make test` runs both; `make AIL=<path>/build/ail test` with the command of a checkout of AIL, which must be one that has the libraries above.
