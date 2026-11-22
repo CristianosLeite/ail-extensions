@@ -17,6 +17,7 @@ buf tools 144
 buf to 8
 buf from 8
 buf rb 65536
+buf big 4194400
 
 # echo: the text of the argument "text", or a failure without one
 async fn echo x p n r
@@ -132,6 +133,35 @@ call ask "{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"ping\"}"
 call ask "{\"jsonrpc\":\"2.0\",\"id\":13}"
 call ask "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":3}}"
 call ask "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}"
+call ask "{\"id\":20,\"method\":\"ping\"}"
+call ask "{\"jsonrpc\":\"1.0\",\"id\":21,\"method\":\"ping\"}"
+call ask "{\"jsonrpc\":2.0,\"id\":22,\"method\":\"tools/call\",\"params\":{\"name\":\"echo\",\"arguments\":{\"text\":\"x\"}}}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":1.5,\"method\":\"ping\"}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":1e2,\"method\":\"ping\"}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":-7,\"method\":\"ping\"}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":23,\"method\":\"tools/list\",\"params\":7}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":24,\"method\":\"initialize\",\"params\":false}"
+call ask "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/x\",\"params\":7}"
+# a line of exactly the 4 MiB it may have is read, and is no JSON; one
+# byte more is too long, whether or not its line feed comes with it
+i=0
+while i<4194305
+	storeb big+i 120
+	i+=1
+end
+call print "> 4194304 bytes x\n"
+load4 to+4 as w
+call asyncwriteall w big 4194304 as h
+await h as r
+call asyncwriteall w "\n" as h
+await h as r
+call hear
+call print "> 4194305 bytes x\n"
+storeb big+4194305 10
+call asyncwriteall w big 4194306 as h
+await h as r
+call hear
+call ask "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"ping\"}"
 call say "   "
 call say "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"ping\"}"
 call hear

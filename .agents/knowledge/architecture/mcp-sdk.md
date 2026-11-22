@@ -36,6 +36,14 @@ word. It is on the branch `mcp`, which is not pushed.
   (the specification); the SDK checks only that the arguments are an object.
 - **A structured result is checked to be one JSON object** and sent without its line
   ends, since a message is one line; a handler that gives another gets -32603.
+- **What is a request is checked before anything is dispatched** (the review of the
+  pull request 2 by Copilot, 2026-11-22, five findings, all taken): a message has
+  `"jsonrpc":"2.0"`, as rmcp requires; an id is a string or a whole number, so `1.5` and
+  `1e2` are none and are answered with the id `null`; params that are sent are an
+  object, and only params that are absent are `{}` (-32602 otherwise, nothing for a
+  notification); the limit of a line holds for a line that was read whole in one piece
+  too, which had depended on where the reads ended; and a failed write of the answer
+  to a line that is too long ends `mcpserve` with the error, as any other write does.
 
 ## Unchecked
 - A real client. The test is a session written from the specification; aildb plans to

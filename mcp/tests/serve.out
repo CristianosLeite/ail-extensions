@@ -37,6 +37,30 @@
 < nothing
 > {"jsonrpc":"2.0","id":1,"result":{}}
 < nothing
+> {"id":20,"method":"ping"}
+< {"jsonrpc":"2.0","id":20,"error":{"code":-32600,"message":"Invalid Request"}}
+> {"jsonrpc":"1.0","id":21,"method":"ping"}
+< {"jsonrpc":"2.0","id":21,"error":{"code":-32600,"message":"Invalid Request"}}
+> {"jsonrpc":2.0,"id":22,"method":"tools/call","params":{"name":"echo","arguments":{"text":"x"}}}
+< {"jsonrpc":"2.0","id":22,"error":{"code":-32600,"message":"Invalid Request"}}
+> {"jsonrpc":"2.0","id":1.5,"method":"ping"}
+< {"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"Invalid Request"}}
+> {"jsonrpc":"2.0","id":1e2,"method":"ping"}
+< {"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"Invalid Request"}}
+> {"jsonrpc":"2.0","id":-7,"method":"ping"}
+< {"jsonrpc":"2.0","id":-7,"result":{}}
+> {"jsonrpc":"2.0","id":23,"method":"tools/list","params":7}
+< {"jsonrpc":"2.0","id":23,"error":{"code":-32602,"message":"The params of a request are an object"}}
+> {"jsonrpc":"2.0","id":24,"method":"initialize","params":false}
+< {"jsonrpc":"2.0","id":24,"error":{"code":-32602,"message":"The params of a request are an object"}}
+> {"jsonrpc":"2.0","method":"notifications/x","params":7}
+< nothing
+> 4194304 bytes x
+< {"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}
+> 4194305 bytes x
+< {"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"The line is too long"}}
+> {"jsonrpc":"2.0","id":30,"method":"ping"}
+< {"jsonrpc":"2.0","id":30,"result":{}}
 >    
 > {"jsonrpc":"2.0","id":14,"method":"ping"}
 < {"jsonrpc":"2.0","id":14,"result":{}}

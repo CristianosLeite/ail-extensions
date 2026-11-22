@@ -52,8 +52,10 @@
 # "tools/list" and "tools/call", takes notifications without an answer,
 # and says of anything else that there is no such method. The errors
 # are those of JSON-RPC: -32700 for a line that is no JSON, -32600 for
-# JSON that is no request, -32601 for a method it has not, -32602 for a
-# tool it has not or arguments that are no object, -32603 for a handler
+# JSON that is no request (no "jsonrpc" of "2.0", an id that is no
+# string and no whole number, a line above 4 MiB), -32601 for a method
+# it has not, -32602 for params or arguments that are no object and a
+# tool it has not, -32603 for a handler
 # whose structured result is no JSON object. A failure of a tool itself
 # is no such error: it is a result with "isError": true.
 #
@@ -322,8 +324,32 @@ async fn mcpline mcpb mcps mcpp mcpn
 		call jsonget mcpa mcpan "id" as mcpip mcpin mcpik
 		call jsonget mcpa mcpan "method" as mcpq mcpqn mcpm
 	end
+	# a number is an id only if it is a whole one: digits after a "-"
+	# or not, with no fraction and no exponent
+	if mcpik==4
+		mcpi=0
+		while mcpi<mcpin
+			loadb mcpip+mcpi as mcpc
+			if (mcpc-48>9)&((mcpc!=45)|(mcpi!=0))
+				mcpik=6
+			end
+			mcpi+=1
+		end
+	end
 	if (mcpik!=4)&(mcpik!=5)
 		mcpin=0
+	end
+	# every message says which JSON-RPC it is, and there is one
+	mcpc=0
+	if mcpk==7
+		call jsonget mcpa mcpan "jsonrpc" as mcpv mcpvn mcpd
+		if mcpd==5
+			call jsoneq mcpv mcpvn "2.0" as mcpc
+		end
+	end
+	ifz mcpc
+		call mcperr mcpb mcpip mcpin 32600 "Invalid Request" 0 0
+		ret 0
 	end
 	if mcpm!=5
 		# no request; a response to something this server never asked
@@ -345,10 +371,16 @@ async fn mcpline mcpb mcps mcpp mcpn
 		call mcperr mcpb 0 0 32600 "Invalid Request" 0 0
 		ret 0
 	end
+	# params that are sent are an object; none are an empty one
 	call jsonget mcpa mcpan "params" as mcpv mcpvn mcpc
-	if mcpc!=7
+	ifz mcpc
 		mcpv=mcpnone
 		mcpvn=2
+		mcpc=7
+	end
+	if mcpc!=7
+		call mcperr mcpb mcpip mcpin 32602 "The params of a request are an object" 0 0
+		ret 0
 	end
 	call jsoneq mcpq mcpqn "ping" as mcpd
 	if mcpd
@@ -421,7 +453,12 @@ async fn mcpserve mcps mcpin mcpout
 				end
 			end
 			if mcpj<mcpl
-				await mcpline mcpw mcps mcpp+mcpo mcpl as mcpr
+				# the limit holds for a line however it was read
+				if mcpl>mcplinemax
+					call mcperr mcpw 0 0 32600 "The line is too long" 0 0
+				else
+					await mcpline mcpw mcps mcpp+mcpo mcpl as mcpr
+				end
 			end
 			load mcpw as mcpq
 			load mcpw+8 as mcpm
@@ -462,6 +499,11 @@ async fn mcpserve mcps mcpin mcpout
 			load mcpw as mcpq
 			load mcpw+8 as mcpm
 			await asyncwriteall mcpout mcpq mcpm as mcpr
+			ifslt mcpr 0
+				call byfree mcpb
+				call byfree mcpw
+				ret mcpr
+			end
 		end
 		mcpskip=1
 		store mcpb+8 0
