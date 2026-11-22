@@ -27,4 +27,4 @@ reported 1207 sources, 44010 lines, 87 statements, 0 wrong.
 ## Not checked
 - The colours a theme gives the scopes, and anything that needs the window: Format Document
   itself, the settings of `package.json`.
-- A clone made by `tools/ail.sh` from the published address; see the open items.
+- (Until 2026-11-22: a clone made by `tools/ail.sh` from the published address.) Since then `make check` without a checkout fetches the tag of the version in `Ailfile`; run so on 2026-11-22 for `v0.1.0`, 1232 sources and no wrong line.

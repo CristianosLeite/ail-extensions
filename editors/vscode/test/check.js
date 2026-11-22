@@ -25,7 +25,8 @@ const { execFileSync } = require('child_process');
 const res = process.argv[2];
 const files = process.argv.slice(3);
 // the main repository, where check.sh runs this from
-const root = path.join(__dirname, '..', '..', '..', 'ail');
+// the checkout of AIL: the directory check.sh runs this in
+const root = process.cwd();
 const ext = require(path.join(__dirname, '..', 'extension.js'));
 
 function lib(name) {

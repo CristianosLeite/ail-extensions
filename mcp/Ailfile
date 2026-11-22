@@ -1,8 +1,0 @@
-# mcp: a Model Context Protocol server in AIL (README.md). A program
-# names this package as a dependency and reads
-#   use "mcp:src/mcp.aiw"
-# It needs an AIL that has lib/std/json.aiw, lib/std/num.aiw and the
-# async library, which came after the version 0.1.0.
-name mcp
-version 0.1.0
-ail 0.1.0

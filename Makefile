@@ -1,23 +1,29 @@
-# The extensions of AIL for editors. An extension needs nothing built;
-# make only checks them, against the main repository, which is at ail/: a
-# clone of the address and revision in ail.pin, which the first make
-# fetches, or a link to a checkout named once with make AIL=<path>.
-AILSAID := $(shell tools/ail.sh $(AIL) 2>&1 || echo failed)
-ifneq ($(AILSAID),)
-$(error $(AILSAID))
-endif
+# ail-extensions is a package of AIL (Ailfile), tested by the command
+# ail: "ail test" runs the tests of the modules written in AIL, and "ail
+# fmt --check" looks at their indentation. AIL names the command, if it
+# is not on PATH:
+#   make AIL=../ail/build/ail test
+AIL ?= ail
+AILCMD := $(if $(findstring /,$(AIL)),$(abspath $(AIL)),$(AIL))
 
-# The formatter of the main repository, which the checks compare the
-# folding with, is built where its source is.
+# The tests of mcp/, the MCP server SDK (tests/mcp_*.aiw), and the
+# indentation of every AIL source.
+test:
+	$(AIL) test $(T)
+	$(AIL) fmt --check
+
+# The check of the editors compares an extension with the language
+# itself, so it reads the sources of AIL: every .aiw file that git has
+# there, the statements of its compiler and its formatter, which is
+# built first. AILSRC is a checkout of AIL; it is the one the command is
+# in when AIL names build/ail of a checkout. Without either, the version
+# of AIL that the line "ail" of Ailfile asks for is fetched once, its
+# tag v<version> of the published repository, into build/, so that who
+# has only this repository can run the check (tools/check.sh).
+AILSRC ?= $(patsubst %/build/ail,%,$(filter %/build/ail,$(AILCMD)))
+AILVER := $(shell sed -n 's/^ail //p' Ailfile)
+AILURL := https://github.com/CristianosLeite/ail.git
 check:
-	@make -s -C ail AIL= build/tools/indent
-	@editors/vscode/check.sh
+	@tools/check.sh "$(AILSRC)" $(AILVER) $(AILURL)
 
-# The MCP server SDK, mcp/, a package of AIL: its tests and its
-# indentation, with the command ail of the main repository, which is
-# built first, and its formatter, which "ail fmt" runs.
-mcp-check:
-	@make -s -C ail AIL= build/ail build/tools/indent
-	cd mcp && ../ail/build/ail test && ../ail/build/ail fmt --check
-
-.PHONY: check mcp-check
+.PHONY: test check

@@ -11,7 +11,7 @@ use "lib/std/json.aiw"
 use "lib/async/task.aiw"
 use "lib/async/time.aiw"
 use "lib/async/io.aiw"
-use "src/mcp.aiw"
+use "mcp/src/mcp.aiw"
 const pipe2 293
 const setrlimit 160
 buf lim 16
