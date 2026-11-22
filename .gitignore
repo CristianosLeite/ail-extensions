@@ -1,3 +1,4 @@
-# the main repository, a clone or a link made by tools/ail.sh
-/ail
+# what ail builds, and the packages it fetches
+build/
+deps/
 *.vsix

@@ -7,24 +7,26 @@ Extensions for [AIL](https://github.com/CristianosLeite/ail), a programming lang
 - `editors/`: support for AIL sources (`.aiw`) in editors, one directory an editor
   - [`editors/vscode/`](editors/vscode/README.md): VS Code: syntax highlighting, folding of the blocks, and Format Document through the formatter of the language. Plain JavaScript, nothing to build; its README says how to install it
 
-- [`mcp/`](mcp/README.md): a Model Context Protocol server in AIL, tools over the stdio transport, for a program that is to be asked by a coding agent. A package of AIL, with its own `Ailfile`
+- [`mcp/`](mcp/README.md): a Model Context Protocol server in AIL, tools over the stdio transport, for a program that is to be asked by a coding agent; a program reads it as `ail-extensions:mcp/src/mcp.aiw`
 
 ## Checks
 
 ```
-make check              # check the grammar and the folding of the VS Code extension on every AIL source
-make AIL=../ail check   # the same against a checkout of your own
+make test                          # the tests of the modules written in AIL, and their indentation
+make check                         # the grammar and the folding of the VS Code extension on every AIL source
+make AIL=../ail/build/ail check    # both with the command, and the sources, of a checkout of your own
 ```
 
-The checks compare an extension with the language itself, so they need the main repository: its sources, the statements of its compiler and its formatter. `make` puts it at `ail/`, which git ignores: a clone of the address in `ail.pin` at the revision pinned there, or, with `make AIL=<path>`, a link to a checkout, which stays until it is removed. A clone at another revision is moved to the pinned one by the next `make`.
+The repository is a package of AIL: `Ailfile` has its name, its version and the version of AIL it needs, and the command `ail` of AIL runs its tests (`ail test`, `ail fmt --check`). A program that uses a module written in AIL names the package as a dependency and reads a file of it, as `use "ail-extensions:mcp/src/mcp.aiw"`.
 
-`make check` needs x86-64 Linux, `git`, what the main repository needs to build its compiler (`curl` or `gh` once, for the seed) and an installed VS Code, whose own runtime and libraries colour the sources; `CODE=<program>` names it where it is not found. Using an extension needs none of that.
+The check of the editors compares an extension with the language itself, so it reads the sources of AIL: every `.aiw` file there, the statements of its compiler and its formatter. They are those of the checkout whose command `AIL` names, or of the directory `AILSRC`; without either, `make check` fetches the version of AIL that `Ailfile` asks for, the tag `v<version>` of the published repository, once into `build/`. It needs x86-64 Linux, `git`, what AIL needs to build its compiler (`curl` or `gh` once, for the seed) and an installed VS Code, whose own runtime and libraries colour the sources; `CODE=<program>` names it where it is not found. Using an extension needs none of that.
 
 ## Layout
 
 - `editors/vscode/`: the extension (`package.json`, `extension.js`, the grammar in `syntaxes/`, `language-configuration.json`), `check.sh` and `test/check.js`
-- `mcp/`: the package (`Ailfile`, `src/mcp.aiw`, `tests/serve.aiw` with the session it is to print); `make mcp-check` runs its tests, with an AIL that has `lib/std/json.aiw`
-- `tools/ail.sh`, `ail.pin`: the main repository at `ail/`
+- `mcp/`: the MCP server SDK, `src/mcp.aiw`, with its tests in `tests/` (`mcp_serve.aiw`, a session it is to print, and `mcp_no_memory.aiw`); they need an AIL that has `lib/std/json.aiw`
+- `Ailfile`: the manifest of the package; `tests/`: the tests that `ail test` runs
+- `tools/check.sh`: the sources of AIL for `make check`
 - `AGENTS.md`, `.agents/knowledge/`: guidance and notes for AI coding agents
 
 ## License

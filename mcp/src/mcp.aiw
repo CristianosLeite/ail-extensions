@@ -1,4 +1,4 @@
-# src/mcp.aiw -- a server of the Model Context Protocol, revision
+# mcp/src/mcp.aiw -- a server of the Model Context Protocol, revision
 # 2025-11-25, over lines of JSON: the stdio transport. It has tools and
 # nothing else: no resources, no prompts, no requests to the client.
 # The official Rust SDK (rmcp) was the reference for what a server is
