@@ -1,0 +1,4 @@
+{"jsonrpc":"2.0","id":1,"result":{}}
+the tool added all its text: 1
+the server ended with -12, and wrote 0 bytes of the second response
+without memory for a response, the server ended with -12

@@ -7,6 +7,8 @@ Extensions for [AIL](https://github.com/CristianosLeite/ail), a programming lang
 - `editors/`: support for AIL sources (`.aiw`) in editors, one directory an editor
   - [`editors/vscode/`](editors/vscode/README.md): VS Code: syntax highlighting, folding of the blocks, and Format Document through the formatter of the language. Plain JavaScript, nothing to build; its README says how to install it
 
+- [`mcp/`](mcp/README.md): a Model Context Protocol server in AIL, tools over the stdio transport, for a program that is to be asked by a coding agent. A package of AIL, with its own `Ailfile`
+
 ## Checks
 
 ```
@@ -21,6 +23,7 @@ The checks compare an extension with the language itself, so they need the main 
 ## Layout
 
 - `editors/vscode/`: the extension (`package.json`, `extension.js`, the grammar in `syntaxes/`, `language-configuration.json`), `check.sh` and `test/check.js`
+- `mcp/`: the package (`Ailfile`, `src/mcp.aiw`, `tests/serve.aiw` with the session it is to print); `make mcp-check` runs its tests, with an AIL that has `lib/std/json.aiw`
 - `tools/ail.sh`, `ail.pin`: the main repository at `ail/`
 - `AGENTS.md`, `.agents/knowledge/`: guidance and notes for AI coding agents
 
