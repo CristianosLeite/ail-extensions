@@ -13,4 +13,11 @@ check:
 	@make -s -C ail AIL= build/tools/indent
 	@editors/vscode/check.sh
 
-.PHONY: check
+# The MCP server SDK, mcp/, a package of AIL: its tests and its
+# indentation, with the command ail of the main repository, which is
+# built first.
+mcp-check:
+	@make -s -C ail AIL= build/ail
+	cd mcp && ../ail/build/ail test && ../ail/build/ail fmt --check
+
+.PHONY: check mcp-check

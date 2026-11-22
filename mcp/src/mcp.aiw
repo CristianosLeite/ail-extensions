@@ -1,0 +1,493 @@
+# src/mcp.aiw -- a server of the Model Context Protocol, revision
+# 2025-11-25, over lines of JSON: the stdio transport. It has tools and
+# nothing else: no resources, no prompts, no requests to the client.
+# The official Rust SDK (rmcp) was the reference for what a server is
+# made of; the names here follow it where AIL has the same thing.
+#
+# A program that uses it uses lib/std/bytes.aiw, lib/std/json.aiw,
+# lib/async/task.aiw, lib/async/time.aiw and lib/async/io.aiw first.
+#
+#     buf server 80          # what rmcp calls ServerInfo
+#     buf tools 144          # two tools, 72 bytes each
+#     ...
+#     await mcpserve server 0 1
+#
+# The server is 80 bytes that the program owns:
+#
+#      0  its name, address and length
+#     16  its version, address and length
+#     32  instructions for the client, address and length, or none
+#     48  the address of its tools and how many they are
+#     64  a value of the program, which every handler is called with
+#     72  written by mcpserve: 1 once a client has sent "initialize"
+#
+# A tool is 72 bytes:
+#
+#      0  its name, address and length: letters, digits, "_", "-", "."
+#     16  its description, address and length
+#     32  the schema of its arguments, a JSON object as text, address
+#         and length
+#     48  the schema of its structured result, the same, or none
+#     64  the address of its handler
+#
+# The handler is an async function of four values: the value of the
+# program, the address and the length of the arguments, a JSON object
+# that lib/std/json.aiw walks ("{}" if the client sent none), and a
+# result of 56 bytes, which is all zero when the handler is called:
+#
+#      0  a bytes buffer for the text of the result
+#     24  a bytes buffer for the structured result, a JSON object
+#     48  1 if the tool failed (isError), which mcpfail stores
+#
+# mcptext adds text to the result and mcpfail makes it an error with a
+# text, as CallToolResult::success and ::error do in rmcp; a structured
+# result is JSON that the handler adds to the buffer at 24, and the
+# server then sends it as "structuredContent" and, if the handler added
+# no text, as the text too, as CallToolResult::structured does. What
+# the handler returns is not looked at.
+#
+# mcpserve reads requests from one descriptor and writes responses to
+# another, a line each, until the input ends; its result is 0 then, or
+# the error of a read or a write. It answers "initialize", "ping",
+# "tools/list" and "tools/call", takes notifications without an answer,
+# and says of anything else that there is no such method. The errors
+# are those of JSON-RPC: -32700 for a line that is no JSON, -32600 for
+# JSON that is no request, -32601 for a method it has not, -32602 for a
+# tool it has not or arguments that are no object, -32603 for a handler
+# whose structured result is no JSON object. A failure of a tool itself
+# is no such error: it is a result with "isError": true.
+#
+# Nothing is written to the output but responses, as the transport
+# asks; what a program wants to say goes to its stderr. A request is
+# answered before the next is read.
+#
+# Every variable and parameter of this file has a name that starts with
+# "mcp"; a program has no var of such a name.
+
+# a line of the client is at most this long
+const mcplinemax 4194304
+# the arguments and the params that were not sent
+data mcpnone "{}"
+
+# add the text of the mcpn bytes at mcpp to the result mcpr: 1, or 0
+# without memory
+fn mcptext mcpr mcpp mcpn
+	tail byadd mcpr mcpp mcpn
+end
+
+# make the result mcpr the failure of the tool, with the text of the
+# mcpn bytes at mcpp in place of what it had: 1, or 0 without memory
+fn mcpfail mcpr mcpp mcpn
+	store mcpr+48 1
+	call bycut mcpr 0
+	call bycut mcpr+24 0
+	tail byadd mcpr mcpp mcpn
+end
+
+# add the start of a response to the bytes buffer mcpb: the id of the
+# mcpn bytes at mcpp as it was sent, or null if there is none
+fn mcphead mcpb mcpp mcpn
+	call byadd mcpb "{\"jsonrpc\":\"2.0\",\"id\":"
+	ifz mcpn
+		tail byadd mcpb "null"
+	end
+	tail byadd mcpb mcpp mcpn
+end
+
+# add an error response to mcpb: the id, the code, which is below 0 and
+# given without its sign, and the message of the mcpm bytes at mcpq,
+# followed by the mcpk bytes at mcpx if there are any
+fn mcperr mcpb mcpp mcpn mcpc mcpq mcpm mcpx mcpk
+	local mcpt 24
+	store mcpt 0
+	store mcpt+8 0
+	store mcpt+16 0
+	call byadd mcpt mcpq mcpm
+	call byadd mcpt mcpx mcpk
+	call mcphead mcpb mcpp mcpn
+	call byadd mcpb ",\"error\":{\"code\":-"
+	call byaddn mcpb mcpc
+	call byadd mcpb ",\"message\":"
+	load mcpt as mcpq
+	load mcpt+8 as mcpm
+	call jsonadds mcpb mcpq mcpm
+	call byadd mcpb "}}\n" as mcpr
+	call byfree mcpt
+	ret mcpr
+end
+
+# add the mcpn bytes at mcpp, JSON that was checked, to mcpb without
+# its line ends, which stand only between its parts
+fn mcpflat mcpb mcpp mcpn
+	mcpi=0
+	mcpr=1
+	while mcpi<mcpn
+		mcpj=mcpi
+		label run
+		if mcpj<mcpn
+			loadb mcpp+mcpj as mcpc
+			if (mcpc!=10)&(mcpc!=13)
+				mcpj+=1
+				jmp run
+			end
+		end
+		call byadd mcpb mcpp+mcpi mcpj-mcpi as mcpr
+		mcpi=mcpj+1
+	end
+	ret mcpr
+end
+
+# add the result of "initialize" to mcpb, for the server mcps and the
+# params of the request, the mcpn bytes at mcpp
+fn mcpinit mcpb mcps mcpp mcpn
+	# the revision the client asked for if it is one of these, else the
+	# newest
+	call jsonget mcpp mcpn "protocolVersion" as mcpv mcpvn mcpk
+	call jsoneq mcpv mcpvn "2025-06-18" as mcpa
+	call jsoneq mcpv mcpvn "2025-03-26" as mcpc
+	call jsoneq mcpv mcpvn "2024-11-05" as mcpd
+	call byadd mcpb ",\"result\":{\"protocolVersion\":"
+	if (mcpk==5)&(mcpa|mcpc|mcpd)
+		call byadd mcpb mcpv mcpvn
+	else
+		call byadd mcpb "\"2025-11-25\""
+	end
+	call byadd mcpb ",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":"
+	load mcps as mcpq
+	load mcps+8 as mcpm
+	call jsonadds mcpb mcpq mcpm
+	call byadd mcpb ",\"version\":"
+	load mcps+16 as mcpq
+	load mcps+24 as mcpm
+	call jsonadds mcpb mcpq mcpm
+	call byaddb mcpb 125
+	load mcps+32 as mcpq
+	load mcps+40 as mcpm
+	if mcpm
+		call byadd mcpb ",\"instructions\":"
+		call jsonadds mcpb mcpq mcpm
+	end
+	store mcps+72 1
+	tail byadd mcpb "}}\n"
+end
+
+# add the result of "tools/list" to mcpb
+fn mcplist mcpb mcps
+	load mcps+48 as mcpt
+	load mcps+56 as mcpn
+	call byadd mcpb ",\"result\":{\"tools\":["
+	mcpi=0
+	while mcpi<mcpn
+		if mcpi
+			call byaddb mcpb 44
+		end
+		call byadd mcpb "{\"name\":"
+		load mcpt as mcpp
+		load mcpt+8 as mcpm
+		call jsonadds mcpb mcpp mcpm
+		call byadd mcpb ",\"description\":"
+		load mcpt+16 as mcpp
+		load mcpt+24 as mcpm
+		call jsonadds mcpb mcpp mcpm
+		call byadd mcpb ",\"inputSchema\":"
+		load mcpt+32 as mcpp
+		load mcpt+40 as mcpm
+		call mcpflat mcpb mcpp mcpm
+		load mcpt+48 as mcpp
+		load mcpt+56 as mcpm
+		if mcpm
+			call byadd mcpb ",\"outputSchema\":"
+			call mcpflat mcpb mcpp mcpm
+		end
+		call byaddb mcpb 125
+		mcpt+=72
+		mcpi+=1
+	end
+	tail byadd mcpb "]}}\n"
+end
+
+# Answer "tools/call": the tool is looked for, its handler awaited and
+# its result added to mcpb, after the id of the mcpin bytes at mcpip.
+# mcpp mcpn are the params of the request.
+async fn mcpcall mcpb mcps mcpip mcpin mcpp mcpn
+	local mcpr 56
+	local mcpw 24
+	call jsonget mcpp mcpn "name" as mcpv mcpvn mcpk
+	load mcps+48 as mcpt
+	load mcps+56 as mcpc
+	mcpi=0
+	mcpf=0
+	while (mcpi<mcpc)&(mcpf==0)
+		load mcpt as mcpq
+		load mcpt+8 as mcpm
+		if mcpk==5
+			call jsoneq mcpv mcpvn mcpq mcpm as mcpf
+		end
+		ifz mcpf
+			mcpt+=72
+		end
+		mcpi+=1
+	end
+	ifz mcpf
+		mcpq=0
+		mcpm=0
+		if mcpk==5
+			mcpq=mcpv+1
+			mcpm=mcpvn-2
+		end
+		call mcperr mcpb mcpip mcpin 32602 "Unknown tool: " mcpq mcpm
+		ret 0
+	end
+	call jsonget mcpp mcpn "arguments" as mcpv mcpvn mcpk
+	ifz mcpk
+		mcpv=mcpnone
+		mcpvn=2
+		mcpk=7
+	end
+	if mcpk!=7
+		call mcperr mcpb mcpip mcpin 32602 "The arguments of a tool are an object" 0 0
+		ret 0
+	end
+	mcpi=0
+	while mcpi<56
+		store mcpr+mcpi 0
+		mcpi+=8
+	end
+	load mcpt+64 as mcpf
+	load mcps+64 as mcpx
+	callp mcpf mcpx mcpv mcpvn mcpr as mcph
+	await mcph as mcpd
+	# the structured result is to be one object, or there is none
+	load mcpr+24 as mcpq
+	load mcpr+32 as mcpm
+	mcpk=0
+	if mcpm
+		call jsonvalue mcpq mcpm as mcpq mcpm mcpk
+		if mcpk!=7
+			call byfree mcpr
+			call byfree mcpr+24
+			call mcperr mcpb mcpip mcpin 32603 "The structured result of the tool is no JSON object" 0 0
+			ret 0
+		end
+	end
+	call mcphead mcpb mcpip mcpin
+	call byadd mcpb ",\"result\":{\"content\":[{\"type\":\"text\",\"text\":"
+	load mcpr as mcpv
+	load mcpr+8 as mcpvn
+	if (mcpvn==0)&(mcpk==7)
+		# no text: the structured result as text, without its line ends
+		store mcpw 0
+		store mcpw+8 0
+		store mcpw+16 0
+		call mcpflat mcpw mcpq mcpm
+		load mcpw as mcpv
+		load mcpw+8 as mcpvn
+		call jsonadds mcpb mcpv mcpvn
+		call byfree mcpw
+	else
+		call jsonadds mcpb mcpv mcpvn
+	end
+	call byadd mcpb "}]"
+	if mcpk==7
+		call byadd mcpb ",\"structuredContent\":"
+		call mcpflat mcpb mcpq mcpm
+	end
+	load mcpr+48 as mcpd
+	if mcpd
+		call byadd mcpb ",\"isError\":true}}\n"
+	else
+		call byadd mcpb ",\"isError\":false}}\n"
+	end
+	call byfree mcpr
+	call byfree mcpr+24
+	ret 0
+end
+
+# Answer the line of the mcpn bytes at mcpp into the bytes buffer mcpb,
+# which stays empty for a notification.
+async fn mcpline mcpb mcps mcpp mcpn
+	call jsonvalue mcpp mcpn as mcpa mcpan mcpk
+	ifz mcpk
+		call mcperr mcpb 0 0 32700 "Parse error" 0 0
+		ret 0
+	end
+	# the id as it was sent, if it is a string or a number
+	mcpip=0
+	mcpin=0
+	mcpik=0
+	mcpm=0
+	mcpq=0
+	mcpqn=0
+	if mcpk==7
+		call jsonget mcpa mcpan "id" as mcpip mcpin mcpik
+		call jsonget mcpa mcpan "method" as mcpq mcpqn mcpm
+	end
+	if (mcpik!=4)&(mcpik!=5)
+		mcpin=0
+	end
+	if mcpm!=5
+		# no request; a response to something this server never asked
+		# is passed over
+		call jsonget mcpa mcpan "result" as mcpv mcpvn mcpc
+		call jsonget mcpa mcpan "error" as mcpv mcpvn mcpd
+		if (mcpk==7)&(mcpc|mcpd)
+			ret 0
+		end
+		call mcperr mcpb mcpip mcpin 32600 "Invalid Request" 0 0
+		ret 0
+	end
+	if (mcpik!=4)&(mcpik!=5)
+		# a notification, or an id that is none: an id of null, an
+		# object or an array is no request
+		ifz mcpik
+			ret 0
+		end
+		call mcperr mcpb 0 0 32600 "Invalid Request" 0 0
+		ret 0
+	end
+	call jsonget mcpa mcpan "params" as mcpv mcpvn mcpc
+	if mcpc!=7
+		mcpv=mcpnone
+		mcpvn=2
+	end
+	call jsoneq mcpq mcpqn "ping" as mcpd
+	if mcpd
+		call mcphead mcpb mcpip mcpin
+		call byadd mcpb ",\"result\":{}}\n"
+		ret 0
+	end
+	call jsoneq mcpq mcpqn "initialize" as mcpd
+	if mcpd
+		call mcphead mcpb mcpip mcpin
+		call mcpinit mcpb mcps mcpv mcpvn
+		ret 0
+	end
+	call jsoneq mcpq mcpqn "tools/list" as mcpd
+	if mcpd
+		call mcphead mcpb mcpip mcpin
+		call mcplist mcpb mcps
+		ret 0
+	end
+	call jsoneq mcpq mcpqn "tools/call" as mcpd
+	if mcpd
+		await mcpcall mcpb mcps mcpip mcpin mcpv mcpvn as mcpd
+		ret 0
+	end
+	call mcperr mcpb mcpip mcpin 32601 "Method not found: " mcpq+1 mcpqn-2
+	ret 0
+end
+
+# Serve the client that writes to the descriptor mcpin and reads from
+# mcpout, for the server of the 80 bytes at mcps: 0 when the input has
+# ended, or the error of a read or a write.
+async fn mcpserve mcps mcpin mcpout
+	local mcpb 24
+	local mcpw 24
+	mcpi=0
+	while mcpi<24
+		store mcpb+mcpi 0
+		store mcpw+mcpi 0
+		mcpi+=8
+	end
+	store mcps+72 0
+	# mcpo: where the line that is being read starts; mcpskip: 1 while
+	# the rest of a line that was too long is passed over
+	mcpo=0
+	mcpskip=0
+	mcpend=0
+	label more
+	load mcpb as mcpp
+	load mcpb+8 as mcpn
+	# a whole line?
+	mcpi=mcpo
+	label look
+	if mcpi<mcpn
+		loadb mcpp+mcpi as mcpc
+		if mcpc!=10
+			mcpi+=1
+			jmp look
+		end
+		mcpl=mcpi-mcpo
+		ifz mcpskip
+			call bycut mcpw 0
+			# a line of blanks only is no message
+			mcpj=0
+			label blank
+			if mcpj<mcpl
+				loadb mcpp+mcpo+mcpj as mcpc
+				if (mcpc==32)|(mcpc==13)|(mcpc==9)
+					mcpj+=1
+					jmp blank
+				end
+			end
+			if mcpj<mcpl
+				await mcpline mcpw mcps mcpp+mcpo mcpl as mcpr
+			end
+			load mcpw as mcpq
+			load mcpw+8 as mcpm
+			if mcpm
+				await asyncwriteall mcpout mcpq mcpm as mcpr
+				ifslt mcpr 0
+					call byfree mcpb
+					call byfree mcpw
+					ret mcpr
+				end
+			end
+		end
+		mcpskip=0
+		mcpo=mcpi+1
+		jmp more
+	end
+	if mcpend
+		call byfree mcpb
+		call byfree mcpw
+		ret 0
+	end
+	# no whole line: what was answered is given up, and more is read
+	if mcpo
+		mcpj=0
+		while mcpo+mcpj<mcpn
+			loadb mcpp+mcpo+mcpj as mcpc
+			storeb mcpp+mcpj mcpc
+			mcpj+=1
+		end
+		mcpn-=mcpo
+		store mcpb+8 mcpn
+		mcpo=0
+	end
+	if mcpn>mcplinemax
+		ifz mcpskip
+			call bycut mcpw 0
+			call mcperr mcpw 0 0 32600 "The line is too long" 0 0
+			load mcpw as mcpq
+			load mcpw+8 as mcpm
+			await asyncwriteall mcpout mcpq mcpm as mcpr
+		end
+		mcpskip=1
+		store mcpb+8 0
+	end
+	call byneed mcpb 65536 as mcpr
+	ifz mcpr
+		call byfree mcpb
+		call byfree mcpw
+		ret 0-12
+	end
+	load mcpb as mcpp
+	load mcpb+8 as mcpn
+	await asyncread mcpin mcpp+mcpn 65536 as mcpr
+	ifslt mcpr 0
+		call byfree mcpb
+		call byfree mcpw
+		ret mcpr
+	end
+	ifz mcpr
+		# the end: a last line without a line feed is a line too
+		mcpend=1
+		if (mcpn>0)&(mcpskip==0)
+			call byaddb mcpb 10
+		end
+		jmp more
+	end
+	store mcpb+8 mcpn+mcpr
+	jmp more
+end
