@@ -17,6 +17,7 @@ buf tools 144
 buf to 8
 buf from 8
 buf rb 65536
+data piece "{\"jsonrpc\":\"2.0\",\"id\":45,\"method\":\"ping\"}"
 buf big 4194400
 
 # echo: the text of the argument "text", or a failure without one
@@ -125,8 +126,8 @@ call ask "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"
 store server+64 2
 call ask "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"add\",\"arguments\":{\"a\":1,\"b\":1}}}"
 call ask "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"resources/list\"}"
-call ask "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\"}}"
-call ask "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"1999-01-01\"}}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"t\",\"version\":\"0\"}}}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"1999-01-01\",\"capabilities\":{},\"clientInfo\":{\"name\":\"t\",\"version\":\"0\"}}}"
 call ask "this is no JSON"
 call ask "[1,2]"
 call ask "{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"ping\"}"
@@ -162,6 +163,25 @@ call asyncwriteall w big 4194306 as h
 await h as r
 call hear
 call ask "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"ping\"}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":40,\"method\":\"initialize\",\"params\":{}}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"initialize\"}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"initialize\",\"params\":{\"protocolVersion\":20251125,\"capabilities\":{},\"clientInfo\":{\"name\":\"t\",\"version\":\"0\"}}}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":43,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"clientInfo\":{\"name\":\"t\",\"version\":\"0\"}}}"
+call ask "{\"jsonrpc\":\"2.0\",\"id\":44,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"t\"}}}"
+# a request that comes a byte a write: it is answered once it is whole
+load4 to+4 as w
+i=0
+while i<41
+	call asyncwriteall w piece+i 1 as h
+	await h as r
+	call asyncsleep 1 as h
+	await h as r
+	i+=1
+end
+call print "> the same with the id 45, a byte at a time\n"
+call asyncwriteall w "\n" as h
+await h as r
+call hear
 call say "   "
 call say "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"ping\"}"
 call hear

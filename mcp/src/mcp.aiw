@@ -48,7 +48,8 @@
 #
 # mcpserve reads requests from one descriptor and writes responses to
 # another, a line each, until the input ends; its result is 0 then, or
-# the error of a read or a write. It answers "initialize", "ping",
+# the error of a read or a write, or -12 when a response could not be
+# put together for want of memory: it is then not written in part. It answers "initialize", "ping",
 # "tools/list" and "tools/call", takes notifications without an answer,
 # and says of anything else that there is no such method. The errors
 # are those of JSON-RPC: -32700 for a line that is no JSON, -32600 for
@@ -122,7 +123,6 @@ end
 # its line ends, which stand only between its parts
 fn mcpflat mcpb mcpp mcpn
 	mcpi=0
-	mcpr=1
 	while mcpi<mcpn
 		mcpj=mcpi
 		label run
@@ -134,13 +134,32 @@ fn mcpflat mcpb mcpp mcpn
 			end
 		end
 		call byadd mcpb mcpp+mcpi mcpj-mcpi as mcpr
+		ifz mcpr
+			ret 0
+		end
 		mcpi=mcpj+1
 	end
-	ret mcpr
+	ret 1
+end
+
+# 1 if the params of "initialize", the mcpn bytes at mcpp, have what
+# the protocol asks of them: a protocolVersion that is a string,
+# capabilities that are an object, and a clientInfo that is an object
+# with a name and a version that are strings
+fn mcpclient mcpp mcpn
+	call jsonget mcpp mcpn "protocolVersion" as mcpv mcpvn mcpk
+	call jsonget mcpp mcpn "capabilities" as mcpv mcpvn mcpc
+	call jsonget mcpp mcpn "clientInfo" as mcpv mcpvn mcpd
+	if (mcpk!=5)|(mcpc!=7)|(mcpd!=7)
+		ret 0
+	end
+	call jsonget mcpv mcpvn "name" as mcpq mcpm mcpk
+	call jsonget mcpv mcpvn "version" as mcpq mcpm mcpc
+	ret (mcpk==5)&(mcpc==5)
 end
 
 # add the result of "initialize" to mcpb, for the server mcps and the
-# params of the request, the mcpn bytes at mcpp
+# params of the request, the mcpn bytes at mcpp, which mcpclient took
 fn mcpinit mcpb mcps mcpp mcpn
 	# the revision the client asked for if it is one of these, else the
 	# newest
@@ -281,32 +300,47 @@ async fn mcpcall mcpb mcps mcpip mcpin mcpp mcpn
 		store mcpw 0
 		store mcpw+8 0
 		store mcpw+16 0
-		call mcpflat mcpw mcpq mcpm
+		call mcpflat mcpw mcpq mcpm as mcpd
 		load mcpw as mcpv
 		load mcpw+8 as mcpvn
-		call jsonadds mcpb mcpv mcpvn
+		call jsonadds mcpb mcpv mcpvn as mcpi
 		call byfree mcpw
+		ifz mcpd&mcpi
+			call byfree mcpr
+			call byfree mcpr+24
+			ret 0-12
+		end
 	else
-		call jsonadds mcpb mcpv mcpvn
+		call jsonadds mcpb mcpv mcpvn as mcpi
+		ifz mcpi
+			call byfree mcpr
+			call byfree mcpr+24
+			ret 0-12
+		end
 	end
 	call byadd mcpb "}]"
+	mcpi=1
 	if mcpk==7
 		call byadd mcpb ",\"structuredContent\":"
-		call mcpflat mcpb mcpq mcpm
+		call mcpflat mcpb mcpq mcpm as mcpi
 	end
 	load mcpr+48 as mcpd
 	if mcpd
-		call byadd mcpb ",\"isError\":true}}\n"
+		call byadd mcpb ",\"isError\":true}}\n" as mcpd
 	else
-		call byadd mcpb ",\"isError\":false}}\n"
+		call byadd mcpb ",\"isError\":false}}\n" as mcpd
 	end
 	call byfree mcpr
 	call byfree mcpr+24
+	ifz mcpi&mcpd
+		ret 0-12
+	end
 	ret 0
 end
 
 # Answer the line of the mcpn bytes at mcpp into the bytes buffer mcpb,
-# which stays empty for a notification.
+# which stays empty for a notification: 0, or -12 when the result of a
+# tool could not be written for want of memory.
 async fn mcpline mcpb mcps mcpp mcpn
 	call jsonvalue mcpp mcpn as mcpa mcpan mcpk
 	ifz mcpk
@@ -390,6 +424,11 @@ async fn mcpline mcpb mcps mcpp mcpn
 	end
 	call jsoneq mcpq mcpqn "initialize" as mcpd
 	if mcpd
+		call mcpclient mcpv mcpvn as mcpd
+		ifz mcpd
+			call mcperr mcpb mcpip mcpin 32602 "The params of initialize are a protocolVersion, capabilities and a clientInfo with a name and a version" 0 0
+			ret 0
+		end
 		call mcphead mcpb mcpip mcpin
 		call mcpinit mcpb mcps mcpv mcpvn
 		ret 0
@@ -403,7 +442,7 @@ async fn mcpline mcpb mcps mcpp mcpn
 	call jsoneq mcpq mcpqn "tools/call" as mcpd
 	if mcpd
 		await mcpcall mcpb mcps mcpip mcpin mcpv mcpvn as mcpd
-		ret 0
+		ret mcpd
 	end
 	call mcperr mcpb mcpip mcpin 32601 "Method not found: " mcpq+1 mcpqn-2
 	ret 0
@@ -424,14 +463,20 @@ async fn mcpserve mcps mcpin mcpout
 	store mcps+72 0
 	# mcpo: where the line that is being read starts; mcpskip: 1 while
 	# the rest of a line that was too long is passed over
+	# mcpscan: up to where the bytes were looked at and have no line
+	# feed, so that a line that comes in many reads is looked at once
 	mcpo=0
 	mcpskip=0
 	mcpend=0
+	mcpscan=0
 	label more
 	load mcpb as mcpp
 	load mcpb+8 as mcpn
 	# a whole line?
 	mcpi=mcpo
+	if mcpscan>mcpi
+		mcpi=mcpscan
+	end
 	label look
 	if mcpi<mcpn
 		loadb mcpp+mcpi as mcpc
@@ -458,11 +503,25 @@ async fn mcpserve mcps mcpin mcpout
 					call mcperr mcpw 0 0 32600 "The line is too long" 0 0
 				else
 					await mcpline mcpw mcps mcpp+mcpo mcpl as mcpr
+					ifslt mcpr 0
+						call byfree mcpb
+						call byfree mcpw
+						ret mcpr
+					end
 				end
 			end
 			load mcpw as mcpq
 			load mcpw+8 as mcpm
 			if mcpm
+				# Only a message goes out: a response that is not one
+				# object on one line was cut short for want of memory.
+				call jsonvalue mcpq mcpm-1 as mcpa mcpan mcpk
+				loadb mcpq+mcpm-1 as mcpc
+				if (mcpk!=7)|(mcpc!=10)
+					call byfree mcpb
+					call byfree mcpw
+					ret 0-12
+				end
 				await asyncwriteall mcpout mcpq mcpm as mcpr
 				ifslt mcpr 0
 					call byfree mcpb
@@ -473,8 +532,10 @@ async fn mcpserve mcps mcpin mcpout
 		end
 		mcpskip=0
 		mcpo=mcpi+1
+		mcpscan=mcpo
 		jmp more
 	end
+	mcpscan=mcpn
 	if mcpend
 		call byfree mcpb
 		call byfree mcpw
@@ -490,6 +551,7 @@ async fn mcpserve mcps mcpin mcpout
 		end
 		mcpn-=mcpo
 		store mcpb+8 mcpn
+		mcpscan-=mcpo
 		mcpo=0
 	end
 	if mcpn>mcplinemax
@@ -507,6 +569,7 @@ async fn mcpserve mcps mcpin mcpout
 		end
 		mcpskip=1
 		store mcpb+8 0
+		mcpscan=0
 	end
 	call byneed mcpb 65536 as mcpr
 	ifz mcpr

@@ -21,9 +21,9 @@
 < {"jsonrpc":"2.0","id":9,"error":{"code":-32603,"message":"The structured result of the tool is no JSON object"}}
 > {"jsonrpc":"2.0","id":10,"method":"resources/list"}
 < {"jsonrpc":"2.0","id":10,"error":{"code":-32601,"message":"Method not found: resources/list"}}
-> {"jsonrpc":"2.0","id":11,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}
+> {"jsonrpc":"2.0","id":11,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
 < {"jsonrpc":"2.0","id":11,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"demo","version":"1.2.3"},"instructions":"Two tools, to try the server."}}
-> {"jsonrpc":"2.0","id":12,"method":"initialize","params":{"protocolVersion":"1999-01-01"}}
+> {"jsonrpc":"2.0","id":12,"method":"initialize","params":{"protocolVersion":"1999-01-01","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
 < {"jsonrpc":"2.0","id":12,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"demo","version":"1.2.3"},"instructions":"Two tools, to try the server."}}
 > this is no JSON
 < {"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}
@@ -61,6 +61,18 @@
 < {"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"The line is too long"}}
 > {"jsonrpc":"2.0","id":30,"method":"ping"}
 < {"jsonrpc":"2.0","id":30,"result":{}}
+> {"jsonrpc":"2.0","id":40,"method":"initialize","params":{}}
+< {"jsonrpc":"2.0","id":40,"error":{"code":-32602,"message":"The params of initialize are a protocolVersion, capabilities and a clientInfo with a name and a version"}}
+> {"jsonrpc":"2.0","id":41,"method":"initialize"}
+< {"jsonrpc":"2.0","id":41,"error":{"code":-32602,"message":"The params of initialize are a protocolVersion, capabilities and a clientInfo with a name and a version"}}
+> {"jsonrpc":"2.0","id":42,"method":"initialize","params":{"protocolVersion":20251125,"capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
+< {"jsonrpc":"2.0","id":42,"error":{"code":-32602,"message":"The params of initialize are a protocolVersion, capabilities and a clientInfo with a name and a version"}}
+> {"jsonrpc":"2.0","id":43,"method":"initialize","params":{"protocolVersion":"2025-11-25","clientInfo":{"name":"t","version":"0"}}}
+< {"jsonrpc":"2.0","id":43,"error":{"code":-32602,"message":"The params of initialize are a protocolVersion, capabilities and a clientInfo with a name and a version"}}
+> {"jsonrpc":"2.0","id":44,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"t"}}}
+< {"jsonrpc":"2.0","id":44,"error":{"code":-32602,"message":"The params of initialize are a protocolVersion, capabilities and a clientInfo with a name and a version"}}
+> the same with the id 45, a byte at a time
+< {"jsonrpc":"2.0","id":45,"result":{}}
 >    
 > {"jsonrpc":"2.0","id":14,"method":"ping"}
 < {"jsonrpc":"2.0","id":14,"result":{}}

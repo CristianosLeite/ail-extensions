@@ -15,9 +15,9 @@ check:
 
 # The MCP server SDK, mcp/, a package of AIL: its tests and its
 # indentation, with the command ail of the main repository, which is
-# built first.
+# built first, and its formatter, which "ail fmt" runs.
 mcp-check:
-	@make -s -C ail AIL= build/ail
+	@make -s -C ail AIL= build/ail build/tools/indent
 	cd mcp && ../ail/build/ail test && ../ail/build/ail fmt --check
 
 .PHONY: check mcp-check

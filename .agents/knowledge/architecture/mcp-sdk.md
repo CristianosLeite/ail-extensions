@@ -44,6 +44,16 @@ word. It is on the branch `mcp`, which is not pushed.
   notification); the limit of a line holds for a line that was read whole in one piece
   too, which had depended on where the reads ended; and a failed write of the answer
   to a line that is too long ends `mcpserve` with the error, as any other write does.
+- **The second review of the pull request 2** (Copilot, 2026-11-22, four findings, all
+  taken): `initialize` is answered only when its params have a `protocolVersion` that is
+  a string, `capabilities` that are an object and a `clientInfo` with a name and a
+  version, -32602 otherwise, and the newest revision is the answer to a string that is
+  no revision the server has, not to params that are wrong; a response that could not be
+  put together for want of memory is not written in part: `mcpcall` returns -12 when a
+  piece of a result could not be added, and `mcpserve` writes only what `jsonvalue`
+  takes as one object on one line, and ends with -12 otherwise; the bytes of a line
+  that comes in many reads are looked at once, by a place that is kept between the
+  reads; and `make mcp-check` builds the formatter that `ail fmt` runs.
 
 ## Unchecked
 - A real client. The test is a session written from the specification; aildb plans to
