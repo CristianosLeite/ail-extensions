@@ -1,0 +1,86 @@
+# a result that the response has no room for, the memory of the process
+# limited to 64 MiB: a tool adds 24 MiB of text, which the response
+# would hold a second time. The server writes nothing of it and ends
+# with -12; the request before it was answered.
+use "lib/std/io.aiw"
+use "lib/std/bytes.aiw"
+use "lib/std/json.aiw"
+use "lib/async/task.aiw"
+use "lib/async/time.aiw"
+use "lib/async/io.aiw"
+use "src/mcp.aiw"
+const pipe2 293
+const setrlimit 160
+buf lim 16
+buf server 80
+buf tools 72
+buf to 8
+buf from 8
+buf rb 65536
+buf chunk 65536
+var added
+async fn big x p n r
+	i=0
+	ok=1
+	while ok&(i<384)
+		call mcptext r chunk 65536 as ok
+		i+=ok
+	end
+	added=i
+	ret 0
+end
+fn say p n
+	load4 to+4 as w
+	call asyncwriteall w p n as h
+	await h as r
+	call asyncwriteall w "\n" as h
+	await h as r
+end
+store lim 0x4000000
+store lim+8 0x4000000
+sys setrlimit 9 lim as r
+if r
+	sys exit 1
+end
+i=0
+while i<65536
+	storeb chunk+i 120
+	i+=1
+end
+store server "demo"
+store server+8 4
+store server+16 "1"
+store server+24 1
+store server+48 tools
+store server+56 1
+store tools "big"
+store tools+8 3
+store tools+16 "A result of 24 MiB"
+store tools+24 18
+store tools+32 "{\"type\":\"object\"}"
+store tools+40 17
+ref big as f
+store tools+64 f
+sys pipe2 to 0x80000
+sys pipe2 from 0x80000
+load4 to as rd
+load4 from+4 as wr
+call mcpserve server rd wr as sv
+call say "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}"
+load4 from as f
+call asyncread f rb 65536 as h
+await h as r
+call print rb r
+call say "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"big\",\"arguments\":{}}}"
+await sv as r
+call print "the tool added all its text: "
+call putn added==384
+call print "\nthe server ended with -"
+call putn 0-r
+# nothing was written after the first response: the end of the pipe
+call asyncclose wr
+call asyncread f rb 65536 as h
+await h as r
+call print ", and wrote "
+call putn r
+call print " bytes of the second response\n"

@@ -54,6 +54,14 @@ word. It is on the branch `mcp`, which is not pushed.
   takes as one object on one line, and ends with -12 otherwise; the bytes of a line
   that comes in many reads are looked at once, by a place that is kept between the
   reads; and `make mcp-check` builds the formatter that `ail fmt` runs.
+- **A test without memory** (2026-11-22): the commits of the two reviews said that the
+  paths without memory were not made to happen in a test, and an answer in the pull
+  request said that no test makes an allocation fail. A test can: the tests of the
+  main repository limit the memory of the process with `setrlimit`, which was not
+  looked for before that was written; the user's question brought it out.
+  `mcp/tests/no_memory.aiw` limits the memory to 64 MiB and calls a tool that adds 24
+  MiB of text: the server writes nothing of that response and ends with -12, the
+  request before it answered. Still without a test: a write of a response that fails.
 
 ## Unchecked
 - A real client. The test is a session written from the specification; aildb plans to
