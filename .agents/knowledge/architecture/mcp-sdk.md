@@ -78,5 +78,6 @@ word. It is on the branch `mcp`, which is not pushed.
 ## Unchecked
 - A real client. The test is a session written from the specification; aildb plans to
   ask its server from Claude Code and Codex.
-- `make test` with a released AIL: the libraries the SDK needs came after the tag
-  `v0.1.0`, so it was run with the command of a checkout of AIL at its branch `net-json`.
+- (Until 2026-11-22 the libraries the SDK needs had no released AIL, and the tests ran
+  with the command of a checkout of its branch `net-json`. AIL 0.1.1 has them, and
+  `Ailfile` asks for it.)
