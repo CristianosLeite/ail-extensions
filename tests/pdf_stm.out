@@ -1,0 +1,114 @@
+# the bytes as they are, FlateDecode, a length in another object, a length that is wrong
+open 0
+4: 0 <plain bytes
+4: raw 11
+5: 0 <the bytes of a stream, packed
+5: raw 37
+6: 0 <the bytes of a stream, packed
+8: 0 <longer than three
+9: 0 <shorter
+10: 0 <no length
+11: 0 <
+11: raw 0
+12: -5 <
+12: raw none
+13: -5 <
+2: -5 <
+99: -5 <
+err 0
+# hexadecimal, base 85, two filters, and their short names
+open 0
+4: 0 <Hello 
+5: 0 <He
+6: 0 <x:68656c6c6f20776f726c64210000000020616e642033
+7: 0 <ab
+8: 0 <the bytes of a stream, packed
+9: 0 <the bytes of a stream, packed
+11: 0 <no filter in the array
+# the predictors of PNG, each kind of row, and of TIFF
+open 0
+4: 0 <x:00254a6f94b9de04294e7398bde2082d52779cc1e60c31567ba0c5ea10355a7fa4c9ee14395e83a8cdf2183d6287acd1f61c41668bb0d5fa20456a8fb4d9fe24496e93b8dd02284d7297bce1062c51769bc0e50a30557a9fc4e90e34597ea3c8ed12385d82a7ccf1163c6186abd0f51a40658aafd4f91e44
+5: 0 <x:00254a6f94b9de04294e7398bde2082d52779cc1e60c31567ba0c5ea10355a7fa4c9ee14395e83a8cdf2183d6287acd1f61c41668bb0d5fa20456a8fb4d9fe24496e93b8dd02284d7297bce1062c51769bc0e50a30557a9fc4e90e34597ea3c8ed12385d82a7ccf1163c6186abd0f51a40658aafd4f91e44
+6: 0 <x:00254a6f94b9de04294e7398bde2082d52779cc1e60c31567ba0c5ea10355a7fa4c9ee14395e83a8cdf2183d6287acd1f61c41668bb0d5fa20456a8fb4d9fe24496e93b8dd02284d7297bce1062c51769bc0e50a30557a9fc4e90e34597ea3c8ed12385d82a7ccf1163c6186abd0f51a40658aafd4f91e44
+7: 0 <x:00254a6f94b9de0429
+8: 0 <x:00254a6f94b9de04294e7398bde2082d52779cc1e60c31567ba0c5ea10355a7fa4c9ee14395e83a8cdf2183d6287acd1f61c41668bb0d5fa20456a8fb4d9fe24496e93b8dd02284d7297bce1062c51769bc0e50a30557a9fc4e90e34597ea3c8ed12385d82a7ccf1163c6186abd0f51a40658aafd4f91e44
+9: 0 <the bytes of a stream, packed
+10: 0 <x:00254a6f94b9de04294e7398bde2082d52779cc1e60c31567ba0c5ea10355a7fa4c9ee14395e83a8cdf2183d6287acd1f61c41668bb0d5fa20456a8fb4d9fe24496e93b8dd02284d7297bce1062c51769bc0e50a30557a9fc4e90e34597ea3c8ed12385d82a7ccf1163c6186abd0f51a40658aafd4f91e44
+# a sum of zlib that is wrong or not there; filters that are not known; bytes that are not what the filter says
+open 0
+4: 0 <the bytes of a stream, packed
+5: 0 <the bytes of a stream, packed
+6: -95 <
+7: -95 <
+8: -95 <
+9: -95 <
+10: -95 <
+11: -5 <
+12: -5 <
+13: -5 <
+14: -5 <
+15: -5 <
+16: -5 <
+17: -5 <
+18: -5 <
+19: -5 <
+err 0
+# bytes that unpack to more than the memory left: the document is spent
+open 0
+5: 0 <plain
+4: -7 <
+err -7
+5: -7 <
+open 0
+4: 0 1000000
+# a cross reference stream with a predictor, and objects in an object stream
+open 0
+0: none
+1: <</Type /Catalog /Pages 2 0 R>>
+2: <</Type /Pages /Kids [] /Count 0>>
+3: (in the file)
+4: (packed too)
+7: none
+err 0
+# runs of numbers in Index, entries of wider fields and no predictor
+open 0
+1: <</Type /Catalog /Pages 2 0 R>>
+3: none
+4: (packed too)
+# a table that names a stream for the objects it says are free
+open 0
+1: <</Type /Catalog /Pages 2 0 R>>
+2: <</Type /Pages /Kids [] /Count 0>>
+3: (in the file)
+4: (packed too)
+# an object stream that has not the object, one that is no stream, one whose filter is not known, one whose length is an object of itself and is found by its end
+open 0
+1: <</Type /Catalog /Pages 2 0 R>>
+2: <</Type /Pages /Kids [] /Count 0>>
+3: none
+4: none
+9: none
+10: none
+11: none
+13: 5
+14: none
+15: none
+2: <</Type /Pages /Kids [] /Count 0>>
+err 0
+# the bytes of an object stream count as memory: the catalog is in one
+open -7
+open 0
+1: <</Type /Catalog /Pages 2 0 R>>
+4: (packed too)
+err 0
+# cross reference streams that are none
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
