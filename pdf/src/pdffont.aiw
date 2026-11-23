@@ -1,0 +1,795 @@
+# pdf/src/pdffont.aiw -- a font of a PDF file as what a reader of text
+# needs of it (ISO 32000-1, 9.6 to 9.10): which characters a code of a
+# string stands for, and how wide its glyph is.
+#
+#   pdffontmake d a e        the font whose dictionary is at a
+#   pdffontnext r p n i      the code at the place i of a string
+#   pdffonttext r code b     add the characters of a code, as UTF-8
+#   pdffontwidth r code      the width of its glyph, in thousandths
+#   pdffontfree d r          give the font back
+#
+# d is a document of pdf/src/pdfdoc.aiw, whose memory and work the font
+# counts against; pdffontmake returns the address of the font, or 0 if
+# the document is spent or the kernel has no memory.
+#
+# A code is one byte, or two in a font of the subtype Type0. Its
+# characters are, in this order of precedence: what the ToUnicode CMap
+# of the font says (bfchar and bfrange, with a destination of several
+# characters and with surrogate pairs); for a font of one byte, the
+# glyph name that the Differences of its Encoding give the code, and
+# then its base encoding: WinAnsiEncoding, MacRomanEncoding or
+# StandardEncoding if the font names one; if it names none, the
+# encoding that a Type 1 font program in the file has in its clear
+# part (FontFile; "dup 58 /period put"), as the fonts of TeX need it;
+# else StandardEncoding, or WinAnsiEncoding for a TrueType font. A
+# glyph name is one of the table below, with what follows a dot left
+# out, or uniXXXX, or uXXXX to uXXXXXX, or a name of one byte, which is
+# that character. A code with no characters is U+FFFD. The five
+# ligatures U+FB00 to U+FB04 are written as their letters.
+#
+# What is not read: an Encoding of a Type0 font that is not of two
+# bytes a code, and the encoding inside a font program that is not of
+# Type 1 (FontFile2, FontFile3). A font without ToUnicode that needs
+# one of them gives U+FFFD or the characters of its base encoding.
+#
+# The widths are those of Widths, or of W and DW of the descendant of a
+# Type0 font; a font of one byte without Widths has 500 for every code,
+# 600 if its name starts with Courier.
+#
+# Every name of this file starts with "pdffont"; a program has no var
+# of such a name (see lib/std/io.aiw).
+use "lib/std/bytes.aiw"
+use "pdf/src/pdfobj.aiw"
+use "pdf/src/pdfdoc.aiw"
+use "pdf/src/pdfstm.aiw"
+
+# A font: the address of its dictionary (0), 1 if a code is two bytes
+# (8), the table of the codes (16: four bytes a code, the character, or
+# with the highest bit the place in the bytes at 32 of several, the low
+# 24 bits, and their number, the 7 above), the widths (24: two bytes a
+# code) and the characters of the codes that have several (32: a buffer
+# of lib/std/bytes.aiw).
+const pdffontsize 64
+
+# the characters of the codes 0 to 255 in the three encodings, two
+# bytes each, 0 for a code that has none
+data pdffontstd 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+data 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+data 32 0 33 0 34 0 35 0 36 0 37 0 38 0 25 32 40 0 41 0 42 0 43 0 44 0 45 0 46 0 47 0
+data 48 0 49 0 50 0 51 0 52 0 53 0 54 0 55 0 56 0 57 0 58 0 59 0 60 0 61 0 62 0 63 0
+data 64 0 65 0 66 0 67 0 68 0 69 0 70 0 71 0 72 0 73 0 74 0 75 0 76 0 77 0 78 0 79 0
+data 80 0 81 0 82 0 83 0 84 0 85 0 86 0 87 0 88 0 89 0 90 0 91 0 92 0 93 0 94 0 95 0
+data 24 32 97 0 98 0 99 0 100 0 101 0 102 0 103 0 104 0 105 0 106 0 107 0 108 0 109 0 110 0 111 0
+data 112 0 113 0 114 0 115 0 116 0 117 0 118 0 119 0 120 0 121 0 122 0 123 0 124 0 125 0 126 0 0 0
+data 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+data 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+data 0 0 161 0 162 0 163 0 68 32 165 0 146 1 167 0 164 0 39 0 28 32 171 0 57 32 58 32 1 251 2 251
+data 0 0 19 32 32 32 33 32 183 0 0 0 182 0 34 32 26 32 30 32 29 32 187 0 38 32 48 32 0 0 191 0
+data 0 0 96 0 180 0 198 2 220 2 175 0 216 2 217 2 168 0 0 0 218 2 184 0 0 0 221 2 219 2 199 2
+data 20 32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+data 0 0 198 0 0 0 170 0 0 0 0 0 0 0 0 0 65 1 216 0 82 1 186 0 0 0 0 0 0 0 0 0
+data 0 0 230 0 0 0 0 0 0 0 49 1 0 0 0 0 66 1 248 0 83 1 223 0 0 0 0 0 0 0 0 0
+data pdffontwin 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+data 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+data 32 0 33 0 34 0 35 0 36 0 37 0 38 0 39 0 40 0 41 0 42 0 43 0 44 0 45 0 46 0 47 0
+data 48 0 49 0 50 0 51 0 52 0 53 0 54 0 55 0 56 0 57 0 58 0 59 0 60 0 61 0 62 0 63 0
+data 64 0 65 0 66 0 67 0 68 0 69 0 70 0 71 0 72 0 73 0 74 0 75 0 76 0 77 0 78 0 79 0
+data 80 0 81 0 82 0 83 0 84 0 85 0 86 0 87 0 88 0 89 0 90 0 91 0 92 0 93 0 94 0 95 0
+data 96 0 97 0 98 0 99 0 100 0 101 0 102 0 103 0 104 0 105 0 106 0 107 0 108 0 109 0 110 0 111 0
+data 112 0 113 0 114 0 115 0 116 0 117 0 118 0 119 0 120 0 121 0 122 0 123 0 124 0 125 0 126 0 0 0
+data 172 32 0 0 26 32 146 1 30 32 38 32 32 32 33 32 198 2 48 32 96 1 57 32 82 1 0 0 125 1 0 0
+data 0 0 24 32 25 32 28 32 29 32 34 32 19 32 20 32 220 2 34 33 97 1 58 32 83 1 0 0 126 1 120 1
+data 160 0 161 0 162 0 163 0 164 0 165 0 166 0 167 0 168 0 169 0 170 0 171 0 172 0 173 0 174 0 175 0
+data 176 0 177 0 178 0 179 0 180 0 181 0 182 0 183 0 184 0 185 0 186 0 187 0 188 0 189 0 190 0 191 0
+data 192 0 193 0 194 0 195 0 196 0 197 0 198 0 199 0 200 0 201 0 202 0 203 0 204 0 205 0 206 0 207 0
+data 208 0 209 0 210 0 211 0 212 0 213 0 214 0 215 0 216 0 217 0 218 0 219 0 220 0 221 0 222 0 223 0
+data 224 0 225 0 226 0 227 0 228 0 229 0 230 0 231 0 232 0 233 0 234 0 235 0 236 0 237 0 238 0 239 0
+data 240 0 241 0 242 0 243 0 244 0 245 0 246 0 247 0 248 0 249 0 250 0 251 0 252 0 253 0 254 0 255 0
+data pdffontmac 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+data 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+data 32 0 33 0 34 0 35 0 36 0 37 0 38 0 39 0 40 0 41 0 42 0 43 0 44 0 45 0 46 0 47 0
+data 48 0 49 0 50 0 51 0 52 0 53 0 54 0 55 0 56 0 57 0 58 0 59 0 60 0 61 0 62 0 63 0
+data 64 0 65 0 66 0 67 0 68 0 69 0 70 0 71 0 72 0 73 0 74 0 75 0 76 0 77 0 78 0 79 0
+data 80 0 81 0 82 0 83 0 84 0 85 0 86 0 87 0 88 0 89 0 90 0 91 0 92 0 93 0 94 0 95 0
+data 96 0 97 0 98 0 99 0 100 0 101 0 102 0 103 0 104 0 105 0 106 0 107 0 108 0 109 0 110 0 111 0
+data 112 0 113 0 114 0 115 0 116 0 117 0 118 0 119 0 120 0 121 0 122 0 123 0 124 0 125 0 126 0 0 0
+data 196 0 197 0 199 0 201 0 209 0 214 0 220 0 225 0 224 0 226 0 228 0 227 0 229 0 231 0 233 0 232 0
+data 234 0 235 0 237 0 236 0 238 0 239 0 241 0 243 0 242 0 244 0 246 0 245 0 250 0 249 0 251 0 252 0
+data 32 32 176 0 162 0 163 0 167 0 34 32 182 0 223 0 174 0 169 0 34 33 180 0 168 0 96 34 198 0 216 0
+data 30 34 177 0 100 34 101 34 165 0 181 0 2 34 17 34 15 34 192 3 43 34 170 0 186 0 169 3 230 0 248 0
+data 191 0 161 0 172 0 26 34 146 1 72 34 6 34 171 0 187 0 38 32 160 0 192 0 195 0 213 0 82 1 83 1
+data 19 32 20 32 28 32 29 32 24 32 25 32 247 0 202 37 255 0 120 1 68 32 172 32 57 32 58 32 1 251 2 251
+data 33 32 183 0 26 32 30 32 48 32 194 0 202 0 193 0 203 0 200 0 205 0 206 0 207 0 204 0 211 0 212 0
+data 255 248 210 0 218 0 219 0 217 0 49 1 198 2 220 2 175 0 216 2 217 2 218 2 184 0 221 2 219 2 199 2
+# the glyph names and their characters: a name, a NUL byte, two bytes
+data pdffontnames "A\0" 65 0 "AE\0" 198 0 "Aacute\0" 193 0 "Abreve\0" 2 1 "Acircumflex\0" 194 0 "Adieresis\0" 196 0
+data "Agrave\0" 192 0 "Alpha\0" 145 3 "Aogonek\0" 4 1 "Aring\0" 197 0 "Atilde\0" 195 0 "B\0" 66 0
+data "Beta\0" 146 3 "C\0" 67 0 "Cacute\0" 6 1 "Ccaron\0" 12 1 "Ccedilla\0" 199 0 "Chi\0" 167 3
+data "D\0" 68 0 "Dcaron\0" 14 1 "Dcroat\0" 16 1 "Delta\0" 148 3 "E\0" 69 0 "Eacute\0" 201 0
+data "Ecaron\0" 26 1 "Ecircumflex\0" 202 0 "Edieresis\0" 203 0 "Egrave\0" 200 0 "Eogonek\0" 24 1 "Epsilon\0" 149 3
+data "Eta\0" 151 3 "Eth\0" 208 0 "Euro\0" 172 32 "F\0" 70 0 "G\0" 71 0 "Gamma\0" 147 3
+data "Gbreve\0" 30 1 "H\0" 72 0 "I\0" 73 0 "Iacute\0" 205 0 "Icircumflex\0" 206 0 "Idieresis\0" 207 0
+data "Idotaccent\0" 48 1 "Igrave\0" 204 0 "Iota\0" 153 3 "J\0" 74 0 "K\0" 75 0 "Kappa\0" 154 3
+data "L\0" 76 0 "Lacute\0" 57 1 "Lambda\0" 155 3 "Lcaron\0" 61 1 "Lslash\0" 65 1 "M\0" 77 0
+data "Mu\0" 156 3 "N\0" 78 0 "Nacute\0" 67 1 "Ncaron\0" 71 1 "Ntilde\0" 209 0 "Nu\0" 157 3
+data "O\0" 79 0 "OE\0" 82 1 "Oacute\0" 211 0 "Ocircumflex\0" 212 0 "Odieresis\0" 214 0 "Ograve\0" 210 0
+data "Ohungarumlaut\0" 80 1 "Omega\0" 169 3 "Omicron\0" 159 3 "Oslash\0" 216 0 "Otilde\0" 213 0 "P\0" 80 0
+data "Phi\0" 166 3 "Pi\0" 160 3 "Psi\0" 168 3 "Q\0" 81 0 "R\0" 82 0 "Racute\0" 84 1
+data "Rcaron\0" 88 1 "Rho\0" 161 3 "S\0" 83 0 "Sacute\0" 90 1 "Scaron\0" 96 1 "Scedilla\0" 94 1
+data "Sigma\0" 163 3 "T\0" 84 0 "Tau\0" 164 3 "Tcaron\0" 100 1 "Theta\0" 152 3 "Thorn\0" 222 0
+data "U\0" 85 0 "Uacute\0" 218 0 "Ucircumflex\0" 219 0 "Udieresis\0" 220 0 "Ugrave\0" 217 0 "Uhungarumlaut\0" 112 1
+data "Upsilon\0" 165 3 "Uring\0" 110 1 "V\0" 86 0 "W\0" 87 0 "X\0" 88 0 "Xi\0" 158 3
+data "Y\0" 89 0 "Yacute\0" 221 0 "Ydieresis\0" 120 1 "Z\0" 90 0 "Zacute\0" 121 1 "Zcaron\0" 125 1
+data "Zdotaccent\0" 123 1 "Zeta\0" 150 3 "a\0" 97 0 "aacute\0" 225 0 "abreve\0" 3 1 "acircumflex\0" 226 0
+data "acute\0" 180 0 "adieresis\0" 228 0 "ae\0" 230 0 "agrave\0" 224 0 "alpha\0" 177 3 "ampersand\0" 38 0
+data "aogonek\0" 5 1 "approxequal\0" 72 34 "aring\0" 229 0 "arrowdown\0" 147 33 "arrowleft\0" 144 33 "arrowright\0" 146 33
+data "arrowup\0" 145 33 "asciicircum\0" 94 0 "asciitilde\0" 126 0 "asterisk\0" 42 0 "at\0" 64 0 "atilde\0" 227 0
+data "b\0" 98 0 "backslash\0" 92 0 "bar\0" 124 0 "beta\0" 178 3 "braceleft\0" 123 0 "braceright\0" 125 0
+data "bracketleft\0" 91 0 "bracketright\0" 93 0 "breve\0" 216 2 "brokenbar\0" 166 0 "bullet\0" 34 32 "c\0" 99 0
+data "cacute\0" 7 1 "caron\0" 199 2 "ccaron\0" 13 1 "ccedilla\0" 231 0 "cedilla\0" 184 0 "cent\0" 162 0
+data "chi\0" 199 3 "circumflex\0" 198 2 "colon\0" 58 0 "comma\0" 44 0 "copyright\0" 169 0 "currency\0" 164 0
+data "d\0" 100 0 "dagger\0" 32 32 "daggerdbl\0" 33 32 "dcaron\0" 15 1 "dcroat\0" 17 1 "degree\0" 176 0
+data "delta\0" 180 3 "dieresis\0" 168 0 "divide\0" 247 0 "dollar\0" 36 0 "dotaccent\0" 217 2 "dotlessi\0" 49 1
+data "dotlessj\0" 55 2 "e\0" 101 0 "eacute\0" 233 0 "ecaron\0" 27 1 "ecircumflex\0" 234 0 "edieresis\0" 235 0
+data "egrave\0" 232 0 "eight\0" 56 0 "ellipsis\0" 38 32 "emdash\0" 20 32 "endash\0" 19 32 "eogonek\0" 25 1
+data "epsilon\0" 181 3 "equal\0" 61 0 "eta\0" 183 3 "eth\0" 240 0 "exclam\0" 33 0 "exclamdown\0" 161 0
+data "f\0" 102 0 "ff\0" 0 251 "ffi\0" 3 251 "ffl\0" 4 251 "fi\0" 1 251 "five\0" 53 0
+data "fl\0" 2 251 "florin\0" 146 1 "four\0" 52 0 "fraction\0" 68 32 "g\0" 103 0 "gamma\0" 179 3
+data "gbreve\0" 31 1 "germandbls\0" 223 0 "grave\0" 96 0 "greater\0" 62 0 "greaterequal\0" 101 34 "guillemotleft\0" 171 0
+data "guillemotright\0" 187 0 "guilsinglleft\0" 57 32 "guilsinglright\0" 58 32 "h\0" 104 0 "hungarumlaut\0" 221 2 "hyphen\0" 45 0
+data "i\0" 105 0 "iacute\0" 237 0 "icircumflex\0" 238 0 "idieresis\0" 239 0 "igrave\0" 236 0 "infinity\0" 30 34
+data "integral\0" 43 34 "iota\0" 185 3 "j\0" 106 0 "k\0" 107 0 "kappa\0" 186 3 "l\0" 108 0
+data "lacute\0" 58 1 "lambda\0" 187 3 "lcaron\0" 62 1 "less\0" 60 0 "lessequal\0" 100 34 "logicalnot\0" 172 0
+data "lslash\0" 66 1 "m\0" 109 0 "macron\0" 175 0 "minus\0" 18 34 "mu\0" 181 0 "multiply\0" 215 0
+data "n\0" 110 0 "nacute\0" 68 1 "nbspace\0" 160 0 "ncaron\0" 72 1 "nine\0" 57 0 "notequal\0" 96 34
+data "ntilde\0" 241 0 "nu\0" 189 3 "numbersign\0" 35 0 "o\0" 111 0 "oacute\0" 243 0 "ocircumflex\0" 244 0
+data "odieresis\0" 246 0 "oe\0" 83 1 "ogonek\0" 219 2 "ograve\0" 242 0 "ohungarumlaut\0" 81 1 "omega\0" 201 3
+data "omicron\0" 191 3 "one\0" 49 0 "onehalf\0" 189 0 "onequarter\0" 188 0 "onesuperior\0" 185 0 "ordfeminine\0" 170 0
+data "ordmasculine\0" 186 0 "oslash\0" 248 0 "otilde\0" 245 0 "p\0" 112 0 "paragraph\0" 182 0 "parenleft\0" 40 0
+data "parenright\0" 41 0 "partialdiff\0" 2 34 "percent\0" 37 0 "period\0" 46 0 "periodcentered\0" 183 0 "perthousand\0" 48 32
+data "phi\0" 198 3 "pi\0" 192 3 "plus\0" 43 0 "plusminus\0" 177 0 "product\0" 15 34 "psi\0" 200 3
+data "q\0" 113 0 "question\0" 63 0 "questiondown\0" 191 0 "quotedbl\0" 34 0 "quotedblbase\0" 30 32 "quotedblleft\0" 28 32
+data "quotedblright\0" 29 32 "quoteleft\0" 24 32 "quoteright\0" 25 32 "quotesinglbase\0" 26 32 "quotesingle\0" 39 0 "r\0" 114 0
+data "racute\0" 85 1 "radical\0" 26 34 "rcaron\0" 89 1 "registered\0" 174 0 "rho\0" 193 3 "ring\0" 218 2
+data "s\0" 115 0 "sacute\0" 91 1 "scaron\0" 97 1 "scedilla\0" 95 1 "section\0" 167 0 "semicolon\0" 59 0
+data "seven\0" 55 0 "sfthyphen\0" 173 0 "sigma\0" 195 3 "six\0" 54 0 "slash\0" 47 0 "space\0" 32 0
+data "sterling\0" 163 0 "summation\0" 17 34 "t\0" 116 0 "tau\0" 196 3 "tcaron\0" 101 1 "theta\0" 184 3
+data "thorn\0" 254 0 "three\0" 51 0 "threequarters\0" 190 0 "threesuperior\0" 179 0 "tilde\0" 220 2 "trademark\0" 34 33
+data "two\0" 50 0 "twosuperior\0" 178 0 "u\0" 117 0 "uacute\0" 250 0 "ucircumflex\0" 251 0 "udieresis\0" 252 0
+data "ugrave\0" 249 0 "uhungarumlaut\0" 113 1 "underscore\0" 95 0 "upsilon\0" 197 3 "uring\0" 111 1 "v\0" 118 0
+data "w\0" 119 0 "x\0" 120 0 "xi\0" 190 3 "y\0" 121 0 "yacute\0" 253 0 "ydieresis\0" 255 0
+data "yen\0" 165 0 "z\0" 122 0 "zacute\0" 122 1 "zcaron\0" 126 1 "zdotaccent\0" 124 1 "zero\0" 48 0
+data "zeta\0" 182 3
+data 0
+data pdffontlig "ff fi fl ffiffl"
+
+# the number that the pdffontn hexadecimal digits at pdffontp write, or all ones if
+# one of them is no digit or they are more than eight
+fn pdffonthexnum pdffontp pdffontn
+	if pdffontn>8
+		ret 0-1
+	end
+	pdffontv=0
+	while pdffontn
+		loadb pdffontp as pdffontc
+		call pdfobjdigit pdffontc as pdffontc
+		if pdffontc>15
+			ret 0-1
+		end
+		pdffontv=pdffontv*16+pdffontc
+		pdffontp+=1
+		pdffontn-=1
+	end
+	ret pdffontv
+end
+
+# the character of the glyph name of the pdffontn bytes at pdffontp, or 0
+fn pdffontglyph pdffontp pdffontn
+	# a.sc is a
+	pdffonti=1
+	while pdffonti<pdffontn
+		loadb pdffontp+pdffonti as pdffontc
+		if pdffontc==46
+			pdffontn=pdffonti
+		end
+		pdffonti+=1
+	end
+	pdffontq=pdffontnames
+	label row
+	loadb pdffontq as pdffontc
+	if pdffontc
+		pdffontl=0
+		label len
+		loadb pdffontq+pdffontl as pdffontc
+		if pdffontc
+			pdffontl+=1
+			jmp len
+		end
+		if pdffontl==pdffontn
+			pdffonti=0
+			label same
+			if pdffonti<pdffontn
+				loadb pdffontq+pdffonti as pdffontc
+				loadb pdffontp+pdffonti as pdffontx
+				if pdffontc==pdffontx
+					pdffonti+=1
+					jmp same
+				end
+			else
+				load2 pdffontq+pdffontl+1 as pdffontc
+				ret pdffontc
+			end
+		end
+		pdffontq+=pdffontl+3
+		jmp row
+	end
+	loadb pdffontp as pdffontc
+	if pdffontn==1
+		ret pdffontc
+	end
+	if (pdffontn<5)|(pdffontc!=117)
+		ret 0
+	end
+	load2 pdffontp+1 as pdffontc
+	if (pdffontc==0x696e)&(pdffontn==7)
+		call pdffonthexnum pdffontp+3 4 as pdffontc
+	else
+		if pdffontn>7
+			ret 0
+		end
+		call pdffonthexnum pdffontp+1 pdffontn-1 as pdffontc
+	end
+	if pdffontc>0x10ffff
+		ret 0
+	end
+	ret pdffontc
+end
+
+# make the entry of the code pdffontcode the value pdffontv
+fn pdffontput pdffontr pdffontcode pdffontv
+	load pdffontr+8 as pdffontw
+	pdffontl=256
+	if pdffontw
+		pdffontl=65536
+	end
+	if pdffontcode<pdffontl
+		load pdffontr+16 as pdffontm
+		store4 pdffontm+pdffontcode*4 pdffontv
+	end
+end
+
+# add the character pdffontcp to the buffer pdffontb as UTF-8: 1, or 0
+fn pdffontutf8 pdffontb pdffontcp
+	if pdffontcp<0x80
+		tail byaddb pdffontb pdffontcp
+	end
+	if pdffontcp<0x800
+		call byaddb pdffontb 0xc0|(pdffontcp>>6) as pdffontw
+	else
+		if pdffontcp<0x10000
+			call byaddb pdffontb 0xe0|(pdffontcp>>12) as pdffontw
+		else
+			call byaddb pdffontb 0xf0|(pdffontcp>>18) as pdffontw
+			call byaddb pdffontb 0x80|(pdffontcp>>12&63) as pdffontw
+		end
+		call byaddb pdffontb 0x80|(pdffontcp>>6&63) as pdffontw
+	end
+	tail byaddb pdffontb 0x80|(pdffontcp&63)
+end
+
+fn pdffontnext pdffontr pdffontp pdffontn pdffonti
+	load pdffontr+8 as pdffontw
+	loadb pdffontp+pdffonti as pdffontc
+	pdffonti+=1
+	if pdffontw&(pdffonti<pdffontn)
+		loadb pdffontp+pdffonti as pdffontx
+		pdffontc=pdffontc<<8|pdffontx
+		pdffonti+=1
+	end
+	ret pdffontc pdffonti
+end
+
+fn pdffonttext pdffontr pdffontcode pdffontb
+	load pdffontr+8 as pdffontw
+	pdffontl=256
+	if pdffontw
+		pdffontl=65536
+	end
+	pdffontv=0
+	if pdffontcode<pdffontl
+		load pdffontr+16 as pdffontm
+		load4 pdffontm+pdffontcode*4 as pdffontv
+	end
+	ifz pdffontv
+		pdffontv=0xfffd
+	end
+	if pdffontv&0x80000000
+		load pdffontr+32 as pdffontm
+		tail byadd pdffontb pdffontm+(pdffontv&0xffffff) pdffontv>>24&127
+	end
+	if (pdffontv>=0xfb00)&(pdffontv<=0xfb04)
+		pdffontv-=0xfb00
+		pdffontl=2+(pdffontv>2)
+		tail byadd pdffontb pdffontlig+pdffontv*3 pdffontl
+	end
+	tail pdffontutf8 pdffontb pdffontv
+end
+
+fn pdffontwidth pdffontr pdffontcode
+	load pdffontr+8 as pdffontw
+	pdffontl=256
+	if pdffontw
+		pdffontl=65536
+	end
+	if pdffontcode>=pdffontl
+		ret 0
+	end
+	load pdffontr+24 as pdffontm
+	load2 pdffontm+pdffontcode*2 as pdffontv
+	ret pdffontv
+end
+
+# The entry for the characters that the string at pdffonta writes in UTF-16,
+# the higher byte first; pdffontt is a buffer that it empties and uses. 0 if
+# it writes none.
+fn pdffontdst pdffontr pdffonta pdffonte pdffontt
+	call bycut pdffontt 0
+	call pdfobjstring pdffonta pdffonte pdffontt as pdffontw
+	ifz pdffontw
+		ret 0
+	end
+	load pdffontt as pdffontp
+	load pdffontt+8 as pdffontn
+	if pdffontn==1
+		loadb pdffontp as pdffontc
+		ret pdffontc
+	end
+	load pdffontr+40 as pdffontoff
+	pdffontk=0
+	pdffontcp=0
+	pdffonti=0
+	while pdffonti+1<pdffontn
+		loadb pdffontp+pdffonti as pdffontc
+		loadb pdffontp+pdffonti+1 as pdffontx
+		pdffontc=pdffontc<<8|pdffontx
+		pdffonti+=2
+		if (pdffontc>=0xd800)&(pdffontc<0xdc00)&(pdffonti+1<pdffontn)
+			loadb pdffontp+pdffonti as pdffontx
+			loadb pdffontp+pdffonti+1 as pdffonty
+			pdffontx=pdffontx<<8|pdffonty
+			if (pdffontx>=0xdc00)&(pdffontx<0xe000)
+				pdffontc=0x10000+(pdffontc-0xd800<<10)+pdffontx-0xdc00
+				pdffonti+=2
+			end
+		end
+		pdffontcp=pdffontc
+		pdffontk+=1
+		call pdffontutf8 pdffontr+32 pdffontc as pdffontw
+		ifz pdffontw
+			store pdffontr+40 pdffontoff
+			ret 0
+		end
+	end
+	load pdffontr+40 as pdffontn
+	pdffontn-=pdffontoff
+	# one character needs no bytes
+	if (pdffontk<2)|(pdffontn>127)|(pdffontoff>0xffffff)
+		store pdffontr+40 pdffontoff
+		if pdffontk==1
+			ret pdffontcp
+		end
+		ret 0
+	end
+	ret 0x80000000|(pdffontn<<24)|pdffontoff
+end
+
+# take the codes and their characters from the ToUnicode CMap whose
+# stream dictionary is at pdffonta
+fn pdffontcmap pdffontd pdffontr pdffonta pdffonte
+	local pdffontb 24
+	local pdffontt 24
+	store pdffontb 0
+	store pdffontb+8 0
+	store pdffontb+16 0
+	store pdffontt 0
+	store pdffontt+8 0
+	store pdffontt+16 0
+	call pdfstmdata pdffontd pdffonta pdffonte pdffontb as pdffontx
+	jnz pdffontx done
+	load pdffontb as pdffontp
+	load pdffontb+8 as pdffonte
+	pdffonte+=pdffontp
+	pdffontmode=0
+	pdffontk=0
+	pdffontlo=0
+	pdffonthi=0
+	label more
+	call pdfobjskip pdffontp pdffonte as pdffontp
+	call pdfobjtok pdffontp pdffonte as pdffontkind pdffontm
+	jz pdffontkind done
+	jeq pdffontkind pdfobjbad done
+	call pdfdocspend pdffontd 1 as pdffontw
+	jz pdffontw done
+	if pdffontkind==pdfobjword
+		pdffontmode=0
+		pdffontk=0
+		call pdfdocword pdffontp pdffontm "beginbfchar" as pdffontw
+		if pdffontw
+			pdffontmode=1
+		end
+		call pdfdocword pdffontp pdffontm "beginbfrange" as pdffontw
+		if pdffontw
+			pdffontmode=2
+		end
+	end
+	if (pdffontkind==pdfobjhex)&(pdffontmode!=0)
+		if pdffontk==0
+			call pdffonthexnum pdffontp+1 pdffontm-pdffontp-2 as pdffontlo
+			pdffontk=1
+		else
+			if (pdffontk==1)&(pdffontmode==2)
+				call pdffonthexnum pdffontp+1 pdffontm-pdffontp-2 as pdffonthi
+				pdffontk=2
+			else
+				call pdffontdst pdffontr pdffontp pdffonte pdffontt as pdffontv
+				pdffontk=0
+				if pdffontmode==1
+					call pdffontput pdffontr pdffontlo pdffontv
+				else
+					# the codes of a run have characters that follow one
+					# another, if each has one
+					if (pdffonthi>=pdffontlo)&(pdffonthi-pdffontlo<65536)
+						call pdfdocspend pdffontd pdffonthi-pdffontlo as pdffontw
+						jz pdffontw done
+						while pdffontlo<=pdffonthi
+							call pdffontput pdffontr pdffontlo pdffontv
+							if (pdffontv!=0)&(pdffontv<0x10ffff)
+								pdffontv+=1
+							end
+							pdffontlo+=1
+						end
+					end
+				end
+			end
+		end
+	end
+	if (pdffontkind==pdfobjarr)&(pdffontmode==2)&(pdffontk==2)
+		# a run with the characters of each code written out
+		pdffontk=0
+		call pdfobjskip pdffontm pdffonte as pdffontq
+		label each
+		call pdfobjtok pdffontq pdffonte as pdffontkind pdffontx
+		if (pdffontkind==pdfobjhex)&(pdffontlo<=pdffonthi)
+			call pdffontdst pdffontr pdffontq pdffonte pdffontt as pdffontv
+			call pdffontput pdffontr pdffontlo pdffontv
+			pdffontlo+=1
+			call pdfobjskip pdffontx pdffonte as pdffontq
+			call pdfdocspend pdffontd 1 as pdffontw
+			jnz pdffontw each
+		end
+		call pdfobjvalue pdffontp pdffonte as pdffontm
+		jz pdffontm done
+	end
+	pdffontp=pdffontm
+	jmp more
+	label done
+	call byfree pdffontb
+	call byfree pdffontt
+end
+
+# the encoding that the name token from pdffonta to pdffontm names, or pdffontbase
+fn pdffontencname pdffonta pdffontm pdffontbase
+	call pdfobjis pdffonta pdffontm "WinAnsiEncoding" as pdffontw
+	if pdffontw
+		ret pdffontwin
+	end
+	call pdfobjis pdffonta pdffontm "MacRomanEncoding" as pdffontw
+	if pdffontw
+		ret pdffontmac
+	end
+	call pdfobjis pdffonta pdffontm "StandardEncoding" as pdffontw
+	if pdffontw
+		ret pdffontstd
+	end
+	ret pdffontbase
+end
+
+# Take the encoding from the clear part of the Type 1 font program of
+# the font whose dictionary is at pdffonta, if it has one that is no
+# StandardEncoding: every code is then what the program says, or
+# nothing.
+fn pdffonttype1 pdffontd pdffontr pdffonta pdffonte
+	local pdffontb 24
+	store pdffontb 0
+	store pdffontb+8 0
+	store pdffontb+16 0
+	call pdfdocget pdffontd pdffonta pdffonte "FontDescriptor" as pdffontv pdffontve
+	jz pdffontv done
+	call pdfdocget pdffontd pdffontv pdffontve "FontFile" as pdffontv pdffontve
+	jz pdffontv done
+	call pdfstmdata pdffontd pdffontv pdffontve pdffontb as pdffontx
+	jnz pdffontx done
+	load pdffontb as pdffontp
+	load pdffontb+8 as pdffonte
+	pdffonte+=pdffontp
+	call pdfstmfind pdffontp pdffonte "/Encoding" as pdffontp
+	jz pdffontp done
+	call pdfobjskip pdffontp+9 pdffonte as pdffontp
+	call pdfobjtok pdffontp pdffonte as pdffontk pdffontm
+	call pdfdocword pdffontp pdffontm "StandardEncoding" as pdffontw
+	jnz pdffontw done
+	pdffonti=0
+	while pdffonti<256
+		call pdffontput pdffontr pdffonti 0
+		pdffonti+=1
+	end
+	# "dup 58 /period put", up to the def that ends the array
+	pdffonti=0
+	label more
+	call pdfobjskip pdffontm pdffonte as pdffontp
+	call pdfobjtok pdffontp pdffonte as pdffontk pdffontm
+	pdffonti+=1
+	if (pdffontk==pdfobjend)|(pdffontk==pdfobjbad)|(pdffonti>4096)
+		jmp done
+	end
+	if pdffontk==pdfobjword
+		call pdfdocword pdffontp pdffontm "def" as pdffontw
+		jnz pdffontw done
+		call pdfdocword pdffontp pdffontm "dup" as pdffontw
+		if pdffontw
+			call pdfobjskip pdffontm pdffonte as pdffontp
+			call pdfobjint pdffontp pdffonte as pdffontc pdffontw
+			call pdfobjtok pdffontp pdffonte as pdffontk pdffontm
+			call pdfobjskip pdffontm pdffonte as pdffontq
+			call pdfobjtok pdffontq pdffonte as pdffontk pdffontx
+			if pdffontw&(pdffontk==pdfobjname)
+				pdffontm=pdffontx
+				call pdffontglyph pdffontq+1 pdffontx-pdffontq-1 as pdffontx
+				call pdffontput pdffontr pdffontc pdffontx
+			end
+		end
+	end
+	jmp more
+	label done
+	call byfree pdffontb
+end
+
+# the codes of a font of one byte: its encoding and its widths
+fn pdffontnarrow pdffontd pdffontr pdffonta pdffonte
+	pdffontbase=pdffontstd
+	pdffontown=1
+	call pdfdocget pdffontd pdffonta pdffonte "Subtype" as pdffontv pdffontve
+	if pdffontv
+		call pdfobjtok pdffontv pdffontve as pdffontk pdffontm
+		call pdfobjis pdffontv pdffontm "TrueType" as pdffontw
+		if pdffontw
+			pdffontbase=pdffontwin
+			pdffontown=0
+		end
+	end
+	pdffontdf=0
+	pdffontdfe=0
+	call pdfdocget pdffontd pdffonta pdffonte "Encoding" as pdffontv pdffontve
+	if pdffontv
+		call pdfobjtok pdffontv pdffontve as pdffontk pdffontm
+		if pdffontk==pdfobjname
+			call pdffontencname pdffontv pdffontm pdffontbase as pdffontbase
+			pdffontown=0
+		end
+		if pdffontk==pdfobjdict
+			call pdfdocget pdffontd pdffontv pdffontve "Differences" as pdffontdf pdffontdfe
+			call pdfdocget pdffontd pdffontv pdffontve "BaseEncoding" as pdffontx pdffontxe
+			if pdffontx
+				call pdfobjtok pdffontx pdffontxe as pdffontk pdffontm
+				call pdffontencname pdffontx pdffontm pdffontbase as pdffontbase
+				pdffontown=0
+			end
+		end
+	end
+	pdffonti=0
+	while pdffonti<256
+		load2 pdffontbase+pdffonti*2 as pdffontc
+		call pdffontput pdffontr pdffonti pdffontc
+		pdffonti+=1
+	end
+	if pdffontown
+		call pdffonttype1 pdffontd pdffontr pdffonta pdffonte
+	end
+	if pdffontdf
+		# a number says which code the names after it start at
+		call pdfobjfirst pdffontdf pdffontdfe as pdffontq
+		pdffonti=0
+		label diff
+		if pdffontq
+			call pdfobjtok pdffontq pdffontdfe as pdffontk pdffontm
+			if pdffontk==pdfobjint
+				call pdfobjint pdffontq pdffontdfe as pdffonti pdffontw
+			end
+			if pdffontk==pdfobjname
+				call pdffontglyph pdffontq+1 pdffontm-pdffontq-1 as pdffontc
+				if pdffontc
+					call pdffontput pdffontr pdffonti pdffontc
+				end
+				pdffonti+=1
+			end
+			if (pdffontk==pdfobjint)|(pdffontk==pdfobjname)
+				call pdfobjskip pdffontm pdffontdfe as pdffontq
+				call pdfdocspend pdffontd 1 as pdffontw
+				jnz pdffontw diff
+			end
+		end
+	end
+	# the widths, from FirstChar on
+	load pdffontr+24 as pdffontt
+	call pdfdocget pdffontd pdffonta pdffonte "Widths" as pdffontv pdffontve
+	pdffontq=0
+	if pdffontv
+		call pdfobjfirst pdffontv pdffontve as pdffontq
+	end
+	ifz pdffontq
+		pdffontc=500
+		call pdfdocget pdffontd pdffonta pdffonte "BaseFont" as pdffontx pdffontxe
+		if pdffontx
+			call pdfobjtok pdffontx pdffontxe as pdffontk pdffontm
+			if pdffontm-pdffontx>=8
+				load pdffontx as pdffontk
+				if pdffontk==0x72656972756f432f
+					pdffontc=600
+				end
+			end
+		end
+		pdffonti=0
+		while pdffonti<256
+			store2 pdffontt+pdffonti*2 pdffontc
+			pdffonti+=1
+		end
+		ret 0
+	end
+	call pdfstmparm pdffontd pdffonta pdffonte "FirstChar" 0 as pdffonti
+	label width
+	call pdfobjtok pdffontq pdffontve as pdffontk pdffontm
+	if (pdffontk!=pdfobjarrend)&(pdffontk!=pdfobjend)&(pdffontk!=pdfobjbad)&(pdffonti<256)
+		call pdfdocderef pdffontd pdffontq pdffontve as pdffontx pdffontxe
+		call pdfobjnum pdffontx pdffontxe as pdffontc pdffontw
+		pdffontc/=1000
+		if pdffontc>65535
+			pdffontc=0
+		end
+		store2 pdffontt+pdffonti*2 pdffontc
+		pdffonti+=1
+		call pdfobjnext pdffontq pdffontve as pdffontq
+		jz pdffontq out
+		call pdfdocspend pdffontd 1 as pdffontw
+		jnz pdffontw width
+	end
+	label out
+	ret 0
+end
+
+# the widths of a font of two bytes, from its descendant
+fn pdffontwide pdffontd pdffontr pdffonta pdffonte
+	load pdffontr+24 as pdffontt
+	pdffontdw=1000
+	pdffontq=0
+	pdffontqe=0
+	call pdfdocget pdffontd pdffonta pdffonte "DescendantFonts" as pdffontv pdffontve
+	if pdffontv
+		call pdfstmnth pdffontd pdffontv pdffontve 0 as pdffontx pdffontxe
+		if pdffontx
+			call pdfstmparm pdffontd pdffontx pdffontxe "DW" 1000 as pdffontdw
+			call pdfdocget pdffontd pdffontx pdffontxe "W" as pdffontq pdffontqe
+		end
+	end
+	if pdffontdw>65535
+		pdffontdw=0
+	end
+	pdffonti=0
+	while pdffonti<65536
+		store2 pdffontt+pdffonti*2 pdffontdw
+		pdffonti+=1
+	end
+	ifz pdffontq
+		ret 0
+	end
+	# a code and an array of widths, or two codes and one width
+	call pdfobjfirst pdffontq pdffontqe as pdffontq
+	label more
+	jz pdffontq out
+	call pdfobjint pdffontq pdffontqe as pdffontc pdffontw
+	jz pdffontw out
+	call pdfobjnext pdffontq pdffontqe as pdffontq
+	jz pdffontq out
+	call pdfdocspend pdffontd 2 as pdffontw
+	jz pdffontw out
+	call pdfdocderef pdffontd pdffontq pdffontqe as pdffontx pdffontxe
+	call pdfobjtok pdffontx pdffontxe as pdffontk pdffontm
+	if pdffontk==pdfobjarr
+		call pdfobjfirst pdffontx pdffontxe as pdffontx
+		label each
+		call pdfobjnum pdffontx pdffontxe as pdffontv pdffontw
+		if pdffontw
+			pdffontv/=1000
+			if (pdffontc<65536)&(pdffontv<65536)
+				store2 pdffontt+pdffontc*2 pdffontv
+			end
+			pdffontc+=1
+			call pdfobjnext pdffontx pdffontxe as pdffontx
+			call pdfdocspend pdffontd 1 as pdffontw
+			if pdffontw&(pdffontx!=0)
+				jmp each
+			end
+		end
+	else
+		call pdfobjint pdffontx pdffontxe as pdffonthi pdffontw
+		jz pdffontw out
+		call pdfobjnext pdffontq pdffontqe as pdffontq
+		jz pdffontq out
+		call pdfobjnum pdffontq pdffontqe as pdffontv pdffontw
+		pdffontv/=1000
+		if (pdffonthi<65536)&(pdffontv<65536)&(pdffonthi>=pdffontc)
+			call pdfdocspend pdffontd pdffonthi-pdffontc as pdffontw
+			jz pdffontw out
+			while pdffontc<=pdffonthi
+				store2 pdffontt+pdffontc*2 pdffontv
+				pdffontc+=1
+			end
+		end
+	end
+	call pdfobjnext pdffontq pdffontqe as pdffontq
+	jmp more
+	label out
+	ret 0
+end
+
+fn pdffontmake pdffontd pdffonta pdffonte
+	call pdfdocalloc pdffontd pdffontsize as pdffontr
+	ifz pdffontr
+		ret 0
+	end
+	store pdffontr pdffonta
+	pdffontn=256
+	call pdfdocget pdffontd pdffonta pdffonte "Subtype" as pdffontv pdffontve
+	if pdffontv
+		call pdfobjtok pdffontv pdffontve as pdffontk pdffontm
+		call pdfobjis pdffontv pdffontm "Type0" as pdffontw
+		if pdffontw
+			pdffontn=65536
+			store pdffontr+8 1
+		end
+	end
+	call pdfdocalloc pdffontd pdffontn*4 as pdffontm
+	store pdffontr+16 pdffontm
+	call pdfdocalloc pdffontd pdffontn*2 as pdffontt
+	store pdffontr+24 pdffontt
+	if (pdffontm==0)|(pdffontt==0)
+		call pdffontfree pdffontd pdffontr
+		ret 0
+	end
+	if pdffontn==256
+		call pdffontnarrow pdffontd pdffontr pdffonta pdffonte
+	else
+		call pdffontwide pdffontd pdffontr pdffonta pdffonte
+	end
+	call pdfdocget pdffontd pdffonta pdffonte "ToUnicode" as pdffontv pdffontve
+	if pdffontv
+		call pdfobjtok pdffontv pdffontve as pdffontk pdffontm
+		if pdffontk==pdfobjdict
+			call pdffontcmap pdffontd pdffontr pdffontv pdffontve
+		end
+	end
+	ret pdffontr
+end
+
+fn pdffontfree pdffontd pdffontr
+	load pdffontr+8 as pdffontw
+	pdffontn=256
+	if pdffontw
+		pdffontn=65536
+	end
+	load pdffontr+16 as pdffonta
+	call pdfdocrelease pdffontd pdffonta pdffontn*4
+	load pdffontr+24 as pdffonta
+	call pdfdocrelease pdffontd pdffonta pdffontn*2
+	call byfree pdffontr+32
+	call pdfdocrelease pdffontd pdffontr pdffontsize
+end
