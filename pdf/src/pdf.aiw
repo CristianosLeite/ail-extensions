@@ -1,0 +1,1021 @@
+# pdf/src/pdf.aiw -- the text of the pages of a PDF file (ISO 32000-1).
+# A program that uses it uses lib/std/bytes.aiw first.
+#
+#   pdfopen p n d work mem   open the n bytes at p: the number of pages
+#   pdfpage d i out          add the text of the page i to out, as UTF-8
+#   pdfclose d               give back what was allocated
+#
+# The document d is pdfsize bytes that the caller owns, a buf or a
+# local. The n bytes of the file are the caller's too: nothing is
+# written to them, and they are to stay as they are, at their address,
+# until pdfclose. work and mem are what the document may cost
+# (pdf/src/pdfdoc.aiw): about one of work for every 16 bytes that are
+# looked at, unpacked or added as text and for every object, operator
+# and code, and the bytes that may be allocated at one time. The buffer
+# out is the caller's and is not counted, but the text of one page is
+# at most the memory the document has left when it is read: a page
+# with more makes the document spent, and this is looked at before
+# each code is added, so the buffer does not grow for text that is
+# then taken back. A buffer of lib/std/bytes.aiw grows by doubling, so
+# the room that a page adds to out is at most twice that memory and
+# 4096 bytes. What a caller keeps in out from
+# page to page is its own to limit; the work bounds it, 16 bytes of
+# text a unit.
+#
+# The pages are numbered as the page tree has them: a kid of a node
+# that is no dictionary is a page with its number that cannot be read
+# (pdfbad), so that no page after it has another number than in other
+# readers.
+#
+# pdfopen returns the number of pages, 0 for a file that has none, or
+# a negative number, after which d needs no pdfclose:
+#
+#   pdfdocbad     -22  no PDF file, or one whose structure cannot be
+#                      read; one whose page tree is more than 64 deep
+#   pdfdoclocked  -13  the file is encrypted
+#   pdfdocspent    -7  the work or the memory allowed is used up
+#   pdfdocmem     -12  the kernel has no memory
+#
+# pdfpage takes a page from 1 to the number of pages. out is a buffer
+# of lib/std/bytes.aiw; the result is the number of bytes added, or a
+# negative number, and then out is as it was at the call, with nothing
+# of the page in it. An error of the page leaves the others readable:
+#
+#   pdfbad         -5  the page is no dictionary, its contents are not
+#                      well formed, or a stream of them cannot be
+#                      unpacked
+#   pdffilter     -95  a stream of the page, of its contents or of a
+#                      form drawn on it, has a filter that is not known;
+#                      the page has no text then, even if another of its
+#                      streams has some
+#   pdfrange      -34  there is no such page
+#
+# An error of the document, pdfdocspent or pdfdocmem, is the result of
+# that call and of every one after it.
+#
+# What the text is: the strings that the operators Tj, TJ, ' and "
+# show, in the order of the contents, each code as the characters its
+# font gives it (pdf/src/pdffont.aiw); the contents of a form that Do
+# draws are read where it is drawn; an inline image is passed over. A
+# space that the word spacing makes narrower than a twentieth of the
+# size of the font is left out, and a character spacing wider than
+# 0.15 of it is a space. A line feed is put where a string starts more than half the size of
+# the font off the line of the one before, or far behind its end; a
+# space where it starts more than 0.15 of the size after that end, as
+# the widths of the font say, if the text has none there. Text that is
+# not drawn, clipped or white on white, is text; text that is drawn as
+# an image or as paths is not.
+#
+# Every name of this file starts with "pdf"; a program has no var of
+# such a name (see lib/std/io.aiw).
+use "lib/std/bytes.aiw"
+use "pdf/src/pdfobj.aiw"
+use "pdf/src/pdfdoc.aiw"
+use "pdf/src/pdfstm.aiw"
+use "pdf/src/pdffont.aiw"
+
+const pdfbad -5
+const pdffilter -95
+const pdfrange -34
+
+# The document: one of pdf/src/pdfdoc.aiw, then the pages (128: their
+# address, 136: their number, 144: the room; 32 bytes a page, the
+# address of its dictionary, the one after its bytes, and the same of
+# the Resources it has or inherits) and the fonts that were read (152:
+# a buffer of lib/std/bytes.aiw, 16 bytes a font, the address of its
+# dictionary and that of the font).
+const pdfsize 192
+
+# The state of a page while it is read, pdfstate bytes: the buffer of
+# the text (0), the font (8) and its size (16), the text matrix (24),
+# the text line matrix (72), the matrix of the page (120), the leading
+# (168), the character and the word spacing (176, 184), the horizontal
+# scaling (192), where the last string ended (200, 208) and whether
+# there was one (216), how many forms are being drawn (224) and which
+# (232, 16 of them), how many states are saved (360) and the states
+# (368, 32 of 96 bytes), a buffer for the bytes of a string (3440),
+# and where the text of the page starts in its buffer (3464). Numbers
+# are in thousandths.
+const pdfstate 3472
+const pdff 8
+const pdffs 16
+const pdftm 24
+const pdftl 72
+const pdfct 120
+const pdfld 168
+const pdftc 176
+const pdftw 184
+const pdftz 192
+const pdflx 200
+const pdfly 208
+const pdfhv 216
+const pdfdp 224
+const pdffst 232
+const pdfgn 360
+const pdfgs 368
+const pdfsb 3440
+const pdfps 3464
+
+# the product of two numbers in thousandths
+fn pdfm3 pdfx pdfy
+	sdiv pdfx*pdfy 1000 as pdfv
+	ret pdfv
+end
+
+# the root of pdfv, rounded down
+fn pdfroot pdfv
+	ifz pdfv
+		ret 0
+	end
+	pdfx=pdfv
+	pdfy=pdfx+1>>1
+	while pdfy<pdfx
+		pdfx=pdfy
+		pdfy=pdfx+pdfv/pdfx>>1
+	end
+	ret pdfx
+end
+
+# make the matrix at pdfm the one that changes nothing
+fn pdfident pdfm
+	store pdfm 1000
+	store pdfm+8 0
+	store pdfm+16 0
+	store pdfm+24 1000
+	store pdfm+32 0
+	store pdfm+40 0
+end
+
+# make the matrix at pdfm the product of those at pdfa and pdfb, pdfa first;
+# pdfm may be one of them
+fn pdfmul pdfm pdfa pdfb
+	local pdft 48
+	pdfi=0
+	while pdfi<48
+		load pdfa+pdfi as pdfx
+		load pdfa+pdfi+8 as pdfy
+		load pdfb as pdfu
+		load pdfb+16 as pdfv
+		call pdfm3 pdfx pdfu as pdfp
+		call pdfm3 pdfy pdfv as pdfq
+		pdfp+=pdfq
+		load pdfb+8 as pdfu
+		load pdfb+24 as pdfv
+		call pdfm3 pdfx pdfu as pdfq
+		call pdfm3 pdfy pdfv as pdfw
+		pdfq+=pdfw
+		if pdfi==32
+			load pdfb+32 as pdfu
+			load pdfb+40 as pdfv
+			pdfp+=pdfu
+			pdfq+=pdfv
+		end
+		store pdft+pdfi pdfp
+		store pdft+pdfi+8 pdfq
+		pdfi+=16
+	end
+	call bycopy pdfm pdft 48
+end
+
+# the operand pdfj from the last of the pdfn whose addresses are at pdfops,
+# as a number in thousandths; 0 if there is none
+fn pdfnum pdfops pdfn pdfj pdfe
+	if pdfj>=pdfn
+		ret 0
+	end
+	load pdfops+(pdfn-1-pdfj)*8 as pdfa
+	call pdfobjnum pdfa pdfe as pdfv pdfw
+	ret pdfv
+end
+
+# where the next glyph is drawn on the page, and the direction of its
+# line there
+fn pdfpen pdfst
+	local pdfm 48
+	call pdfmul pdfm pdfst+pdftm pdfst+pdfct
+	load pdfm as pdfux
+	load pdfm+8 as pdfuy
+	load pdfm+32 as pdfx
+	load pdfm+40 as pdfy
+	ret pdfx pdfy pdfux pdfuy
+end
+
+# put a line feed or a space before the string that is about to be
+# shown, if it starts off the line of the one before or after a gap:
+# 0, or pdfdocmem if there is no memory for it
+fn pdfgap pdfst
+	load pdfst+pdfhv as pdfh
+	ifz pdfh
+		ret 0
+	end
+	call pdfpen pdfst as pdfx pdfy pdfux pdfuy
+	call pdfroot pdfux*pdfux+pdfuy*pdfuy as pdfu
+	ifz pdfu
+		ret 0
+	end
+	load pdfst+pdffs as pdfem
+	ifslt pdfem 0
+		pdfem=0-pdfem
+	end
+	call pdfm3 pdfem pdfu as pdfem
+	load pdfst+pdflx as pdfdx
+	load pdfst+pdfly as pdfdy
+	pdfdx=pdfx-pdfdx
+	pdfdy=pdfy-pdfdy
+	sdiv pdfdx*pdfux+pdfdy*pdfuy pdfu as pdfalong
+	sdiv pdfdy*pdfux-pdfdx*pdfuy pdfu as pdfperp
+	ifslt pdfperp 0
+		pdfperp=0-pdfperp
+	end
+	pdfc=0
+	ifsgt pdfalong*100 pdfem*15
+		pdfc=32
+	end
+	ifsgt pdfperp*2 pdfem
+		pdfc=10
+	end
+	ifslt pdfalong 0-pdfem*2
+		pdfc=10
+	end
+	ifz pdfc
+		ret 0
+	end
+	load pdfst as pdfb
+	load pdfb as pdfp
+	load pdfb+8 as pdfn
+	load pdfst+pdfps as pdfs
+	if pdfn<=pdfs
+		ret 0
+	end
+	loadb pdfp+pdfn-1 as pdfx
+	if (pdfx==10)|(pdfx==pdfc)
+		ret 0
+	end
+	if (pdfc==10)&(pdfx==32)
+		# no space at the end of a line
+		storeb pdfp+pdfn-1 10
+		ret 0
+	end
+	call byaddb pdfb pdfc as pdfw
+	ifz pdfw
+		ret pdfdocmem
+	end
+	ret 0
+end
+
+# move the text matrix along its line by pdftx
+fn pdfadv pdfst pdftx
+	load pdfst+pdftm as pdfa
+	load pdfst+pdftm+8 as pdfb
+	load pdfst+pdftm+32 as pdfx
+	load pdfst+pdftm+40 as pdfy
+	call pdfm3 pdftx pdfa as pdfa
+	call pdfm3 pdftx pdfb as pdfb
+	store pdfst+pdftm+32 pdfx+pdfa
+	store pdfst+pdftm+40 pdfy+pdfb
+end
+
+# start a line that is pdftx and pdfty from the start of the one before
+fn pdfmove pdfst pdftx pdfty
+	local pdfm 48
+	call pdfident pdfm
+	store pdfm+32 pdftx
+	store pdfm+40 pdfty
+	call pdfmul pdfst+pdftl pdfm pdfst+pdftl
+	call bycopy pdfst+pdftm pdfst+pdftl 48
+end
+
+# show the string at pdfa: its text into the buffer, the text matrix
+# moved by its widths
+fn pdftext pdfd pdfst pdfa pdfe
+	load pdfst+pdff as pdfr
+	ifz pdfr
+		ret 0
+	end
+	call pdfobjtok pdfa pdfe as pdfk pdfm
+	if (pdfk!=pdfobjstr)&(pdfk!=pdfobjhex)
+		ret 0
+	end
+	pdfb=pdfst+pdfsb
+	call bycut pdfb 0
+	call pdfobjstring pdfa pdfe pdfb as pdfw
+	ifz pdfw
+		# a string, and no memory for its bytes: the page is not whole
+		tail pdfdocfail pdfd pdfdocmem
+	end
+	load pdfb as pdfp
+	load pdfb+8 as pdfn
+	ifz pdfn
+		ret 0
+	end
+	call pdfdocspend pdfd (pdfn>>2)+1 as pdfw
+	ifz pdfw
+		ret 0
+	end
+	call pdfgap pdfst as pdfw
+	if pdfw
+		tail pdfdocfail pdfd pdfdocmem
+	end
+	load pdfst as pdfo
+	load pdfst+pdffs as pdffsz
+	load pdfst+pdftc as pdfc
+	load pdfst+pdftw as pdfws
+	load pdfst+pdftz as pdfz
+	# a character spacing as wide as a gap between words is one: some
+	# writers set a space that way, after the glyph before it
+	pdfem=pdffsz
+	ifslt pdfem 0
+		pdfem=0-pdfem
+	end
+	pdfbig=0
+	ifsgt pdfc*100 pdfem*15
+		pdfbig=1
+	end
+	load pdfr+8 as pdfwide
+	load pdfo+8 as pdfo0
+	pdfsum=0
+	pdfi=0
+	while pdfi<pdfn
+		call pdffontnext pdfr pdfp pdfn pdfi as pdfcode pdfi
+		call pdffontwidth pdfr pdfcode as pdfw
+		call pdfm3 pdfw pdffsz as pdfw
+		pdfw+=pdfc
+		pdfx=1
+		if (pdfcode==32)&(pdfwide==0)
+			# the word spacing is for the code 32 of one byte, whatever
+			# its glyph; a space that it takes back is none, but a
+			# letter at that code stays
+			pdfw+=pdfws
+			call pdffontspace pdfr pdfcode as pdfk
+			if pdfk
+				ifslt pdfw*20 pdfem
+					pdfx=0
+				end
+			end
+		end
+		pdfsum+=pdfw
+		if pdfx
+			# before the buffer grows: the characters of a code are 127
+			# bytes at most, and the text of the page with them is to be
+			# no more than the memory left
+			load pdfo+8 as pdfk
+			load pdfst+pdfps as pdfq
+			load pdfd+40 as pdfm
+			if pdfk-pdfq+127>pdfm
+				tail pdfdocfail pdfd pdfdocspent
+			end
+			call pdffonttext pdfr pdfcode pdfo as pdfw
+			ifz pdfw
+				tail pdfdocfail pdfd pdfdocmem
+			end
+		end
+		if pdfbig&(pdfi<pdfn)
+			# after a character of this page that is no space
+			load pdfo as pdfq
+			load pdfo+8 as pdfk
+			load pdfst+pdfps as pdfx
+			if pdfk>pdfx
+				loadb pdfq+pdfk-1 as pdfx
+				if pdfx!=32
+					call byaddb pdfo 32 as pdfw
+					ifz pdfw
+						tail pdfdocfail pdfd pdfdocmem
+					end
+				end
+			end
+		end
+	end
+	# the string ends where its last glyph does, before the spacing
+	# after it
+	call pdfm3 pdfsum-pdfc pdfz as pdfsum
+	call pdfadv pdfst pdfsum
+	call pdfpen pdfst as pdfx pdfy pdfux pdfuy
+	store pdfst+pdflx pdfx
+	store pdfst+pdfly pdfy
+	store pdfst+pdfhv 1
+	call pdfm3 pdfc pdfz as pdfsum
+	call pdfadv pdfst pdfsum
+	# the text is work as it is added
+	load pdfo+8 as pdfk
+	call pdfdocspend pdfd pdfk-pdfo0>>4 as pdfw
+end
+
+# make the font of the page the one that the Font resources name with
+# the token from pdfa to pdfm
+fn pdffont pdfd pdfst pdfra pdfre pdfa pdfm
+	local pdfnm 256
+	store pdfst+pdff 0
+	ifz pdfra
+		ret 0
+	end
+	call pdfdocget pdfd pdfra pdfre "Font" as pdfx pdfxe
+	ifz pdfx
+		ret 0
+	end
+	# the name as its bytes: /F#31 is F1
+	call pdfobjnamed pdfa pdfm pdfnm 256 as pdfn
+	if pdfn>256
+		ret 0
+	end
+	call pdfdocget pdfd pdfx pdfxe pdfnm pdfn as pdffa pdffe
+	ifz pdffa
+		ret 0
+	end
+	# a font that was read is not read again
+	load pdfd+152 as pdfq
+	load pdfd+160 as pdfn
+	call pdfdocspend pdfd (pdfn>>7)+1 as pdfw
+	ifz pdfw
+		ret 0
+	end
+	pdfi=0
+	while pdfi<pdfn
+		load pdfq+pdfi as pdfx
+		if pdfx==pdffa
+			load pdfq+pdfi+8 as pdfr
+			store pdfst+pdff pdfr
+			ret 0
+		end
+		pdfi+=16
+	end
+	call pdffontmake pdfd pdffa pdffe as pdfr
+	ifz pdfr
+		ret 0
+	end
+	call byneed pdfd+152 16 as pdfw
+	ifz pdfw
+		call pdffontfree pdfd pdfr
+		tail pdfdocfail pdfd pdfdocmem
+	end
+	load pdfd+152 as pdfq
+	store pdfq+pdfn pdffa
+	store pdfq+pdfn+8 pdfr
+	store pdfd+160 pdfn+16
+	store pdfst+pdff pdfr
+end
+
+# save the state that q saves into the 96 bytes at pdfs, or bring it back
+fn pdfsave pdfst pdfs
+	call bycopy pdfs pdfst+pdfct 80
+	call bycopy pdfs+80 pdfst+pdff 16
+end
+fn pdfback pdfst pdfs
+	call bycopy pdfst+pdfct pdfs 80
+	call bycopy pdfst+pdff pdfs+80 16
+end
+
+# draw the form that the XObject resources name with the token from pdfa
+# to pdfm: 0, or an error of the page
+fn pdfform pdfd pdfst pdfra pdfre pdfa pdfm
+	local pdfc 24
+	local pdfsv 96
+	local pdfmx 48
+	local pdfnm 256
+	ifz pdfra
+		ret 0
+	end
+	call pdfdocget pdfd pdfra pdfre "XObject" as pdfx pdfxe
+	ifz pdfx
+		ret 0
+	end
+	call pdfobjnamed pdfa pdfm pdfnm 256 as pdfn
+	if pdfn>256
+		ret 0
+	end
+	call pdfdocget pdfd pdfx pdfxe pdfnm pdfn as pdffa pdffe
+	ifz pdffa
+		ret 0
+	end
+	call pdfdocget pdfd pdffa pdffe "Subtype" as pdfx pdfxe
+	ifz pdfx
+		ret 0
+	end
+	call pdfobjtok pdfx pdfxe as pdfk pdfn
+	call pdfobjis pdfx pdfn "Form" as pdfw
+	ifz pdfw
+		ret 0
+	end
+	# not deeper than 12, and no form inside itself
+	load pdfst+pdfdp as pdfdep
+	if pdfdep>=12
+		ret 0
+	end
+	pdfi=0
+	while pdfi<pdfdep
+		load pdfst+pdffst+pdfi*8 as pdfx
+		if pdfx==pdffa
+			ret 0
+		end
+		pdfi+=1
+	end
+	store pdfc 0
+	store pdfc+8 0
+	store pdfc+16 0
+	call pdfstmdata pdfd pdffa pdffe pdfc as pdfr
+	if pdfr
+		call byfree pdfc
+		ret pdfr
+	end
+	# its contents are held while it is drawn, with those of the page
+	# and of the forms around it
+	load pdfc+16 as pdfheld
+	call pdfdochold pdfd pdfheld as pdfw
+	ifz pdfw
+		call byfree pdfc
+		ret 0
+	end
+	store pdfst+pdffst+pdfdep*8 pdffa
+	store pdfst+pdfdp pdfdep+1
+	call pdfsave pdfst pdfsv
+	call pdfdocget pdfd pdffa pdffe "Matrix" as pdfx pdfxe
+	if pdfx
+		call pdfobjfirst pdfx pdfxe as pdfx
+		pdfi=0
+		while (pdfi<48)&(pdfx!=0)
+			call pdfobjnum pdfx pdfxe as pdfv pdfw
+			store pdfmx+pdfi pdfv
+			pdfi+=8
+			call pdfobjnext pdfx pdfxe as pdfx
+		end
+		if pdfi==48
+			call pdfmul pdfst+pdfct pdfmx pdfst+pdfct
+		end
+	end
+	call pdfdocget pdfd pdffa pdffe "Resources" as pdfx pdfxe
+	ifz pdfx
+		pdfx=pdfra
+		pdfxe=pdfre
+	end
+	load pdfc as pdfp
+	load pdfc+8 as pdfn
+	call pdfrun pdfd pdfst pdfp pdfp+pdfn pdfx pdfxe as pdfr
+	call pdfback pdfst pdfsv
+	store pdfst+pdfdp pdfdep
+	call byfree pdfc
+	call pdfdocdrop pdfd pdfheld
+	ret pdfr
+end
+
+# Read the contents from pdfp to pdfe with the resources at pdfra: 0, or an
+# error of the page.
+fn pdfrun pdfd pdfst pdfp pdfe pdfra pdfre
+	local pdfops 64
+	local pdfmx 48
+	pdfn=0
+	label more
+	call pdfobjskip pdfp pdfe as pdfp
+	call pdfobjtok pdfp pdfe as pdfk pdfm
+	jz pdfk done
+	call pdfdocspend pdfd 1 as pdfw
+	jz pdfw done
+	if pdfk==pdfobjbad
+		ret pdfbad
+	end
+	if (pdfk==pdfobjarr)|(pdfk==pdfobjdict)
+		call pdfobjvalue pdfp pdfe as pdfm
+		ifz pdfm
+			ret pdfbad
+		end
+		call pdfdocspend pdfd pdfm-pdfp>>4 as pdfw
+		jz pdfw done
+	end
+	if pdfk!=pdfobjword
+		# an operand: the last eight are kept
+		if (pdfk!=pdfobjarrend)&(pdfk!=pdfobjdictend)
+			if pdfn==8
+				pdfi=0
+				while pdfi<56
+					load pdfops+pdfi+8 as pdfx
+					store pdfops+pdfi pdfx
+					pdfi+=8
+				end
+				pdfn=7
+			end
+			store pdfops+pdfn*8 pdfp
+			pdfn+=1
+		end
+		pdfp=pdfm
+		jmp more
+	end
+	# an operator: its bytes as a number, the first lowest
+	pdfop=0
+	if pdfm-pdfp<4
+		pdfi=pdfm
+		while pdfi>pdfp
+			pdfi-=1
+			loadb pdfi as pdfx
+			pdfop=pdfop<<8|pdfx
+		end
+	end
+	pdfp=pdfm
+	pdfa=0
+	if pdfn
+		load pdfops+pdfn*8-8 as pdfa
+	end
+	if pdfop==21570
+		call pdfident pdfst+pdftm
+		call pdfident pdfst+pdftl
+	end
+	if pdfop==26196
+		call pdfnum pdfops pdfn 0 pdfe as pdfx
+		store pdfst+pdffs pdfx
+		if pdfn>=2
+			load pdfops+pdfn*8-16 as pdfa
+			call pdfobjtok pdfa pdfe as pdfk pdfm
+			if pdfk==pdfobjname
+				call pdffont pdfd pdfst pdfra pdfre pdfa pdfm
+			end
+		end
+	end
+	if (pdfop==25684)|(pdfop==17492)
+		call pdfnum pdfops pdfn 1 pdfe as pdfx
+		call pdfnum pdfops pdfn 0 pdfe as pdfy
+		if pdfop==17492
+			store pdfst+pdfld 0-pdfy
+		end
+		call pdfmove pdfst pdfx pdfy
+	end
+	if pdfop==27988
+		pdfi=0
+		while pdfi<6
+			call pdfnum pdfops pdfn 5-pdfi pdfe as pdfx
+			store pdfst+pdftm+pdfi*8 pdfx
+			store pdfst+pdftl+pdfi*8 pdfx
+			pdfi+=1
+		end
+	end
+	if pdfop==19540
+		call pdfnum pdfops pdfn 0 pdfe as pdfx
+		store pdfst+pdfld pdfx
+	end
+	if pdfop==25428
+		call pdfnum pdfops pdfn 0 pdfe as pdfx
+		store pdfst+pdftc pdfx
+	end
+	if pdfop==30548
+		call pdfnum pdfops pdfn 0 pdfe as pdfx
+		store pdfst+pdftw pdfx
+	end
+	if pdfop==31316
+		call pdfnum pdfops pdfn 0 pdfe as pdfx
+		sdiv pdfx 100 as pdfx
+		store pdfst+pdftz pdfx
+	end
+	if pdfop==34
+		call pdfnum pdfops pdfn 2 pdfe as pdfx
+		store pdfst+pdftw pdfx
+		call pdfnum pdfops pdfn 1 pdfe as pdfx
+		store pdfst+pdftc pdfx
+	end
+	if (pdfop==10836)|(pdfop==39)|(pdfop==34)
+		load pdfst+pdfld as pdfx
+		call pdfmove pdfst 0 0-pdfx
+	end
+	if (pdfop==27220)|(pdfop==39)|(pdfop==34)
+		if pdfa
+			call pdftext pdfd pdfst pdfa pdfe
+		end
+	end
+	if (pdfop==19028)&(pdfa!=0)
+		# strings, and numbers that move what follows them back
+		call pdfobjfirst pdfa pdfe as pdfa
+		label each
+		if pdfa
+			call pdfobjtok pdfa pdfe as pdfk pdfm
+			if (pdfk==pdfobjstr)|(pdfk==pdfobjhex)
+				call pdftext pdfd pdfst pdfa pdfe
+			end
+			if (pdfk==pdfobjint)|(pdfk==pdfobjreal)
+				call pdfobjnum pdfa pdfe as pdfx pdfw
+				load pdfst+pdffs as pdfy
+				sdiv pdfx*pdfy 1000000 as pdfx
+				load pdfst+pdftz as pdfy
+				call pdfm3 pdfx pdfy as pdfx
+				call pdfadv pdfst 0-pdfx
+			end
+			if (pdfk!=pdfobjarrend)&(pdfk!=pdfobjend)&(pdfk!=pdfobjbad)
+				call pdfobjnext pdfa pdfe as pdfa
+				call pdfdocspend pdfd 1 as pdfw
+				jnz pdfw each
+			end
+		end
+	end
+	if pdfop==113
+		load pdfst+pdfgn as pdfx
+		if pdfx<32
+			call pdfsave pdfst pdfst+pdfgs+pdfx*96
+		end
+		store pdfst+pdfgn pdfx+1
+	end
+	if pdfop==81
+		load pdfst+pdfgn as pdfx
+		if pdfx
+			pdfx-=1
+			store pdfst+pdfgn pdfx
+			if pdfx<32
+				call pdfback pdfst pdfst+pdfgs+pdfx*96
+			end
+		end
+	end
+	if pdfop==28003
+		pdfi=0
+		while pdfi<6
+			call pdfnum pdfops pdfn 5-pdfi pdfe as pdfx
+			store pdfmx+pdfi*8 pdfx
+			pdfi+=1
+		end
+		call pdfmul pdfst+pdfct pdfmx pdfst+pdfct
+	end
+	if (pdfop==28484)&(pdfa!=0)
+		call pdfobjtok pdfa pdfe as pdfk pdfm
+		if pdfk==pdfobjname
+			call pdfform pdfd pdfst pdfra pdfre pdfa pdfm as pdfx
+			if pdfx
+				ret pdfx
+			end
+		end
+	end
+	if pdfop==18754
+		# an inline image: its bytes start one byte after ID and end
+		# before an EI that has white space on both sides
+		label id
+		call pdfobjskip pdfp pdfe as pdfp
+		call pdfobjtok pdfp pdfe as pdfk pdfm
+		if (pdfk==pdfobjend)|(pdfk==pdfobjbad)
+			ret pdfbad
+		end
+		call pdfdocword pdfp pdfm "ID" as pdfw
+		pdfp=pdfm
+		jz pdfw id
+		pdfp+=1
+		label ei
+		if pdfp+2>pdfe
+			ret pdfbad
+		end
+		load2 pdfp as pdfx
+		if pdfx==0x4945
+			loadb pdfp-1 as pdfx
+			call pdfobjwhite pdfx as pdfw
+			pdfx=32
+			if pdfp+2<pdfe
+				loadb pdfp+2 as pdfx
+			end
+			call pdfobjwhite pdfx as pdfy
+			if pdfw&pdfy
+				pdfp+=2
+				jmp next
+			end
+		end
+		pdfp+=1
+		jmp ei
+	end
+	label next
+	pdfn=0
+	jmp more
+	label done
+	ret 0
+end
+
+# add a page to those of the document: 1, or 0
+fn pdfaddpage pdfd pdfa pdfe pdfra pdfre
+	load pdfd+128 as pdft
+	load pdfd+136 as pdfn
+	load pdfd+144 as pdfc
+	if pdfn==pdfc
+		pdfc=pdfc*2+16
+		call pdfdocalloc pdfd pdfc*32 as pdfq
+		ifz pdfq
+			ret 0
+		end
+		call bycopy pdfq pdft pdfn*32
+		call pdfdocrelease pdfd pdft pdfn*32
+		store pdfd+128 pdfq
+		store pdfd+144 pdfc
+		pdft=pdfq
+	end
+	pdft+=pdfn*32
+	store pdft pdfa
+	store pdft+8 pdfe
+	store pdft+16 pdfra
+	store pdft+24 pdfre
+	store pdfd+136 pdfn+1
+	ret 1
+end
+
+# find the pages: the tree is walked from the catalog, the kids of a
+# node in their order, with the Resources that a page takes from the
+# nodes above it
+fn pdftree pdfd
+	local pdfstk 2560
+	load pdfd+56 as pdfx
+	call pdfdocobj pdfd pdfx as pdfa pdfe
+	jz pdfa out
+	call pdfdocget pdfd pdfa pdfe "Pages" as pdfna pdfne
+	jz pdfna out
+	pdfra=0
+	pdfre=0
+	pdfdep=0
+	label node
+	call pdfdocspend pdfd 2 as pdfw
+	jz pdfw out
+	call pdfobjtok pdfna pdfne as pdfk pdfm
+	if pdfk!=pdfobjdict
+		# a kid that is no dictionary is a page that cannot be read:
+		# it has its number, so that the pages after it keep theirs
+		if pdfdep
+			call pdfaddpage pdfd 0 0 0 0 as pdfw
+			jz pdfw out
+		end
+		jmp up
+	end
+	call pdfdocget pdfd pdfna pdfne "Resources" as pdfx pdfxe
+	if pdfx
+		pdfra=pdfx
+		pdfre=pdfxe
+	end
+	call pdfdocget pdfd pdfna pdfne "Kids" as pdfq pdfqe
+	if pdfq
+		call pdfobjfirst pdfq pdfqe as pdfq
+		jz pdfq up
+		# no node below itself; deeper than 64 the pages cannot be
+		# counted, and a page left out would give those after it the
+		# wrong number, so the document is not read
+		if pdfdep>=64
+			call pdfdocfail pdfd pdfdocbad
+			jmp out
+		end
+		pdfi=0
+		while pdfi<pdfdep
+			load pdfstk+pdfi*40+32 as pdfx
+			jeq pdfx pdfna up
+			pdfi+=1
+		end
+		pdfs=pdfstk+pdfdep*40
+		store pdfs pdfq
+		store pdfs+8 pdfqe
+		store pdfs+16 pdfra
+		store pdfs+24 pdfre
+		store pdfs+32 pdfna
+		pdfdep+=1
+		jmp up
+	end
+	call pdfaddpage pdfd pdfna pdfne pdfra pdfre as pdfw
+	jz pdfw out
+	label up
+	jz pdfdep out
+	pdfs=pdfstk+pdfdep*40-40
+	load pdfs as pdfq
+	load pdfs+8 as pdfqe
+	load pdfs+16 as pdfra
+	load pdfs+24 as pdfre
+	call pdfobjtok pdfq pdfqe as pdfk pdfm
+	if (pdfk==pdfobjarrend)|(pdfk==pdfobjend)|(pdfk==pdfobjbad)
+		pdfdep-=1
+		jmp up
+	end
+	call pdfobjnext pdfq pdfqe as pdfx
+	ifz pdfx
+		pdfx=pdfqe
+	end
+	store pdfs pdfx
+	call pdfdocderef pdfd pdfq pdfqe as pdfna pdfne
+	jmp node
+	label out
+end
+
+fn pdfopen pdfp pdfn pdfd pdfwork pdfcap
+	pdfi=pdfdocsize
+	while pdfi<pdfsize
+		store pdfd+pdfi 0
+		pdfi+=8
+	end
+	call pdfdocopen pdfp pdfn pdfd pdfwork pdfcap as pdfr
+	if pdfr
+		ret pdfr
+	end
+	call pdftree pdfd
+	call pdfdocerr pdfd as pdfr
+	if pdfr
+		call pdfclose pdfd
+		ret pdfr
+	end
+	load pdfd+136 as pdfn
+	ret pdfn
+end
+
+fn pdfpage pdfd pdfi pdfout
+	local pdfst pdfstate
+	local pdfc 24
+	call pdfdocerr pdfd as pdfr
+	if pdfr
+		ret pdfr
+	end
+	load pdfd+136 as pdfn
+	if (pdfi<1)|(pdfi>pdfn)
+		ret pdfrange
+	end
+	load pdfd+128 as pdft
+	pdft+=pdfi*32-32
+	load pdft as pdfpa
+	ifz pdfpa
+		ret pdfbad
+	end
+	load pdft+8 as pdfpe
+	load pdft+16 as pdfra
+	load pdft+24 as pdfre
+	pdfk=0
+	while pdfk<pdfstate
+		store pdfst+pdfk 0
+		pdfk+=8
+	end
+	store pdfc 0
+	store pdfc+8 0
+	store pdfc+16 0
+	load pdfout+8 as pdfstart
+	pdfheld=0
+	store pdfst pdfout
+	store pdfst+pdfps pdfstart
+	store pdfst+pdftz 1000
+	call pdfident pdfst+pdftm
+	call pdfident pdfst+pdftl
+	call pdfident pdfst+pdfct
+	pdfr=0
+	call pdfdocget pdfd pdfpa pdfpe "Contents" as pdfv pdfve
+	jz pdfv done
+	call pdfobjtok pdfv pdfve as pdfk pdfm
+	if pdfk==pdfobjarr
+		# several streams are one, with white space between them
+		call pdfobjfirst pdfv pdfve as pdfq
+		# an array that does not end, or with what is no value in it, is
+		# no contents: the streams before are not the page
+		label each
+		jz pdfq broken
+		call pdfobjtok pdfq pdfve as pdfk pdfm
+		if (pdfk==pdfobjend)|(pdfk==pdfobjbad)
+			jmp broken
+		end
+		if pdfk!=pdfobjarrend
+			call pdfdocderef pdfd pdfq pdfve as pdfx pdfxe
+			call pdfstmdata pdfd pdfx pdfxe pdfc as pdfr
+			jnz pdfr done
+			call byaddb pdfc 10 as pdfw
+			ifz pdfw
+				call pdfdocfail pdfd pdfdocmem
+				jmp done
+			end
+			# the streams read so far are held, and count
+			load pdfc+16 as pdfx
+			call pdfdochold pdfd pdfx-pdfheld as pdfw
+			jz pdfw done
+			pdfheld=pdfx
+			call pdfobjnext pdfq pdfve as pdfq
+			jmp each
+		end
+	else
+		call pdfstmdata pdfd pdfv pdfve pdfc as pdfr
+		jnz pdfr done
+	end
+	load pdfc+16 as pdfx
+	call pdfdochold pdfd pdfx-pdfheld as pdfw
+	jz pdfw done
+	pdfheld=pdfx
+	load pdfc as pdfp
+	load pdfc+8 as pdfn
+	call pdfrun pdfd pdfst pdfp pdfp+pdfn pdfra pdfre as pdfr
+	jmp done
+	label broken
+	pdfr=pdfbad
+	label done
+	call byfree pdfc
+	call pdfdocdrop pdfd pdfheld
+	call byfree pdfst+pdfsb
+	call pdfdocerr pdfd as pdfx
+	if pdfx
+		pdfr=pdfx
+	end
+	if pdfr
+		store pdfout+8 pdfstart
+		ret pdfr
+	end
+	load pdfout+8 as pdfn
+	ret pdfn-pdfstart
+end
+
+fn pdfclose pdfd
+	load pdfd+152 as pdfq
+	load pdfd+160 as pdfn
+	pdfi=0
+	while pdfi<pdfn
+		load pdfq+pdfi+8 as pdfr
+		call pdffontfree pdfd pdfr
+		pdfi+=16
+	end
+	call byfree pdfd+152
+	load pdfd+128 as pdft
+	load pdfd+144 as pdfc
+	call pdfdocrelease pdfd pdft pdfc*32
+	store pdfd+128 0
+	store pdfd+136 0
+	store pdfd+144 0
+	call pdfdocclose pdfd
+end

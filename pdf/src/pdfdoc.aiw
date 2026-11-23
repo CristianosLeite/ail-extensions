@@ -1,0 +1,830 @@
+# pdf/src/pdfdoc.aiw -- a PDF file as a document: where its objects
+# are (ISO 32000-1, 7.5), read from the bytes of the file where they
+# lie.
+#
+#   pdfdocopen p n d work mem   read the cross references of the n bytes at p
+#   pdfdocobj d num             the value of the object with that number
+#   pdfdocref d num gen         the same, of that generation alone
+#   pdfdocderef d a e           the value at a, or the one it refers to
+#   pdfdocget d a e kp kn       the value of a key of the dictionary at a
+#   pdfdocclose d               give back what was allocated
+#
+# The document d is pdfdocsize bytes that the caller owns, a buf or a
+# local. The n bytes of the file are the caller's too: nothing is
+# written to them, and they are to stay as they are, at their address,
+# until pdfdocclose. A value is two addresses, as in pdf/src/pdfobj.aiw:
+# that of its first byte and that after the bytes it lies in, which are
+# those of the file or those of an object stream that was unpacked.
+#
+# pdfdocopen returns 0, or one of the errors below, after which d needs
+# no pdfdocclose and takes none:
+#
+#   pdfdocbad      -22  no PDF file, or one whose cross references cannot be
+#                  read: no "%PDF-" in its first 1024 bytes, no
+#                  startxref in its last 2048, a table or a trailer
+#                  that is not well formed, no catalog
+#   pdfdoclocked   -13  the file is encrypted
+#   pdfdocspent     -7  the work or the memory that the caller allowed is
+#                  used up
+#   pdfdocmem      -12  the kernel has no memory
+#
+# work and mem are what the document may cost, for a file that is made
+# to cost much: work is counted down by about one for every 16 bytes
+# that are looked at and for every object, entry and operator that is
+# read, by this file and by those that read streams, fonts and pages
+# with it; mem is the bytes that may be allocated at one time, counted
+# as they are asked for. When either is used up the document is spent:
+# the error is kept in d, pdfdocerr gives it, and every function gives
+# nothing from then on. pdfdocclose is still to be called.
+#
+# The cross references are a table or a stream (7.5.4, 7.5.8), and an
+# object may lie in an object stream (7.5.7), which is unpacked when
+# the first object of it is asked for and kept until pdfdocclose.
+#
+# An object has a generation beside its number (7.3.10): the one that
+# its entry says, which the two numbers before its "obj" are to give
+# too, and 0 for an object of an object stream. A reference to the
+# number with another generation is to no object, as when an update of
+# the file gave the number of an object that was freed to a new one.
+#
+# What is tolerated: bytes before the header, sections that refer to
+# one another in a circle (each is read once), an entry that points to
+# no object (the object is then none), an object stream that cannot be
+# unpacked (its objects are none). What is not read: a file whose cross
+# references are damaged is not searched for its objects.
+#
+# Every name of this file starts with "pdfdoc"; a program has no var
+# of such a name (see lib/std/io.aiw).
+use "lib/std/bytes.aiw"
+use "pdf/src/pdfobj.aiw"
+
+const pdfdocbad -22
+const pdfdoclocked -13
+const pdfdocspent -7
+const pdfdocmem -12
+
+# The document: the bytes of the file (0, 8: its first address and the
+# one after its last), the table of the objects (16: its address, 24:
+# the number of its entries), the work left (32), the bytes that may
+# still be allocated (40), the error (48), the number of the catalog
+# (56), the newest trailer dictionary (64), the object streams that
+# were unpacked (72: a buffer of lib/std/bytes.aiw, 48 bytes a stream:
+# the address of its bytes, their number, the room there, how many
+# objects it has and where the first starts) and how many of them are
+# being unpacked inside one another (96).
+const pdfdocsize 128
+# an entry of the table is 16 bytes: its kind in the low byte, and the
+# offset of the object in the file or, for one in an object stream, the
+# number of the stream shifted left by 32 and its place in it. Above
+# the kind of an object stream, in 24 bits, is its place among those
+# unpacked, from 1, or pdfdocfailed, and above that, from the bit 32, the
+# generation of the object.
+const pdfdocfailed 0xffffff
+const pdfdocnone 0
+const pdfdocinfile 1
+const pdfdocinstream 2
+const pdfdocfree 3
+# the most objects a file may have (ISO 32000-1, annex C)
+const pdfdocmost 8388608
+
+data pdfdocnull "null"
+
+use "pdf/src/pdfstm.aiw"
+
+# the error of the document, 0 if it has none
+fn pdfdocerr pdfdocd
+	load pdfdocd+48 as pdfdocr
+	ret pdfdocr
+end
+
+# keep the error pdfdocr as that of the document, if it has none yet
+fn pdfdocfail pdfdocd pdfdocr
+	load pdfdocd+48 as pdfdocx
+	ifz pdfdocx
+		store pdfdocd+48 pdfdocr
+	end
+	ret 0
+end
+
+# count pdfdock of the work: 1, or 0 if none is left
+fn pdfdocspend pdfdocd pdfdock
+	load pdfdocd+48 as pdfdocx
+	if pdfdocx
+		ret 0
+	end
+	load pdfdocd+32 as pdfdocw
+	pdfdocw-=pdfdock
+	store pdfdocd+32 pdfdocw
+	ifslt pdfdocw 0
+		store pdfdocd+48 pdfdocspent
+		ret 0
+	end
+	ret 1
+end
+
+# pdfdocn bytes, zero, that count against the memory of the document, or 0;
+# pdfdocrelease gives back those at pdfdoca
+fn pdfdocalloc pdfdocd pdfdocn
+	load pdfdocd+40 as pdfdocm
+	if pdfdocn>pdfdocm
+		tail pdfdocfail pdfdocd pdfdocspent
+	end
+	alloc pdfdocn as pdfdoca
+	ifz pdfdoca
+		tail pdfdocfail pdfdocd pdfdocmem
+	end
+	store pdfdocd+40 pdfdocm-pdfdocn
+	ret pdfdoca
+end
+fn pdfdocrelease pdfdocd pdfdoca pdfdocn
+	if pdfdoca
+		free pdfdoca
+		load pdfdocd+40 as pdfdocm
+		store pdfdocd+40 pdfdocm+pdfdocn
+	end
+end
+
+# count pdfdocn bytes that the caller holds in a buffer of its own against
+# the memory of the document: 1, or 0 if it has not so many left, and
+# then the document is spent; pdfdocdrop counts them back
+fn pdfdochold pdfdocd pdfdocn
+	load pdfdocd+40 as pdfdocm
+	if pdfdocn>pdfdocm
+		tail pdfdocfail pdfdocd pdfdocspent
+	end
+	store pdfdocd+40 pdfdocm-pdfdocn
+	ret 1
+end
+fn pdfdocdrop pdfdocd pdfdocn
+	load pdfdocd+40 as pdfdocm
+	store pdfdocd+40 pdfdocm+pdfdocn
+end
+
+# the address of the last place where the pdfdockn bytes at pdfdockp are among
+# those from pdfdoca to pdfdoce, or 0
+fn pdfdoclast pdfdoca pdfdoce pdfdockp pdfdockn
+	if pdfdoce-pdfdoca<pdfdockn
+		ret 0
+	end
+	pdfdocq=pdfdoce-pdfdockn
+	label more
+	pdfdoci=0
+	label same
+	if pdfdoci<pdfdockn
+		loadb pdfdocq+pdfdoci as pdfdocx
+		loadb pdfdockp+pdfdoci as pdfdocy
+		if pdfdocx==pdfdocy
+			pdfdoci+=1
+			jmp same
+		end
+		if pdfdocq>pdfdoca
+			pdfdocq-=1
+			jmp more
+		end
+		ret 0
+	end
+	ret pdfdocq
+end
+
+# 1 if the token from pdfdoca to pdfdocn is the word of the pdfdockn bytes at pdfdockp
+fn pdfdocword pdfdoca pdfdocn pdfdockp pdfdockn
+	if pdfdocn-pdfdoca!=pdfdockn
+		ret 0
+	end
+	pdfdoci=0
+	while pdfdoci<pdfdockn
+		loadb pdfdoca+pdfdoci as pdfdocx
+		loadb pdfdockp+pdfdoci as pdfdocy
+		if pdfdocx!=pdfdocy
+			ret 0
+		end
+		pdfdoci+=1
+	end
+	ret 1
+end
+
+# make the table have pdfdocn entries at least: 1, or 0
+fn pdfdocroom pdfdocd pdfdocn
+	load pdfdocd+24 as pdfdocs
+	if pdfdocn<=pdfdocs
+		ret 1
+	end
+	if pdfdocn>pdfdocmost
+		tail pdfdocfail pdfdocd pdfdocbad
+	end
+	pdfdocc=pdfdocs*2
+	if pdfdocc<pdfdocn
+		pdfdocc=pdfdocn
+	end
+	if pdfdocc>pdfdocmost
+		pdfdocc=pdfdocmost
+	end
+	call pdfdocalloc pdfdocd pdfdocc*16 as pdfdoca
+	ifz pdfdoca
+		ret 0
+	end
+	load pdfdocd+16 as pdfdoco
+	call bycopy pdfdoca pdfdoco pdfdocs*16
+	call pdfdocrelease pdfdocd pdfdoco pdfdocs*16
+	store pdfdocd+16 pdfdoca
+	store pdfdocd+24 pdfdocc
+	ret 1
+end
+
+# set the entry of the object pdfdocnum, of the generation pdfdocg, if a newer
+# section has not set it
+fn pdfdocset pdfdocd pdfdocnum pdfdockind pdfdocv pdfdocg
+	load pdfdocd+16 as pdfdoct
+	pdfdoct+=pdfdocnum*16
+	load pdfdoct as pdfdock
+	ifz pdfdock
+		store pdfdoct pdfdockind|((pdfdocg&0xffffffff)<<32)
+		store pdfdoct+8 pdfdocv
+	end
+end
+
+# Read the sections of a table that starts at pdfdoca, after its "xref":
+# the address of the trailer dictionary, or 0. With pdfdocdry nothing is
+# kept of the entries: the trailer is looked for. The bytes that were
+# looked at count as work each time, also white space and comments
+# and those of a table that is none.
+fn pdfdoctable pdfdocd pdfdoca pdfdocdry
+	call pdfdocsections pdfdocd pdfdoca pdfdocdry as pdfdocr pdfdocn
+	call pdfdocspend pdfdocd pdfdocn-pdfdoca>>4 as pdfdocw
+	ifz pdfdocw
+		ret 0
+	end
+	ret pdfdocr
+end
+# the same, and the address that was read to
+fn pdfdocsections pdfdocd pdfdoca pdfdocdry
+	load pdfdocd+8 as pdfdoce
+	label sub
+	call pdfobjskip pdfdoca pdfdoce as pdfdoca
+	call pdfobjtok pdfdoca pdfdoce as pdfdock pdfdocn
+	if pdfdock==pdfobjword
+		call pdfdocword pdfdoca pdfdocn "trailer" as pdfdocw
+		ifz pdfdocw
+			ret 0 pdfdocn
+		end
+		call pdfobjskip pdfdocn pdfdoce as pdfdocn
+		ret pdfdocn pdfdocn
+	end
+	call pdfobjint pdfdoca pdfdoce as pdfdocfirst pdfdocw
+	call pdfobjskip pdfdocn pdfdoce as pdfdocb
+	call pdfobjint pdfdocb pdfdoce as pdfdoccount pdfdocx
+	call pdfobjtok pdfdocb pdfdoce as pdfdock pdfdocn
+	# an entry is six bytes at least, so a count that the bytes left
+	# cannot hold is none
+	if (pdfdocw==0)|(pdfdocx==0)|(pdfdocfirst>pdfdocmost)|(pdfdoccount>pdfdocmost)|(pdfdoccount*6>pdfdoce-pdfdocn)
+		ret 0 pdfdocn
+	end
+	ifz pdfdocdry
+		call pdfdocroom pdfdocd pdfdocfirst+pdfdoccount as pdfdocw
+		ifz pdfdocw
+			ret 0 pdfdocn
+		end
+		call pdfdocspend pdfdocd pdfdoccount+1 as pdfdocw
+		ifz pdfdocw
+			ret 0 pdfdocn
+		end
+	end
+	pdfdoca=pdfdocn
+	pdfdoci=0
+	while pdfdoci<pdfdoccount
+		call pdfobjskip pdfdoca pdfdoce as pdfdoca
+		call pdfobjint pdfdoca pdfdoce as pdfdocoff pdfdocw
+		call pdfobjtok pdfdoca pdfdoce as pdfdock pdfdocn
+		call pdfobjskip pdfdocn pdfdoce as pdfdocb
+		call pdfobjint pdfdocb pdfdoce as pdfdocg pdfdocc
+		call pdfobjtok pdfdocb pdfdoce as pdfdocx pdfdocn
+		call pdfobjskip pdfdocn pdfdoce as pdfdocb
+		call pdfobjtok pdfdocb pdfdoce as pdfdocy pdfdocn
+		if (pdfdocw==0)|(pdfdocc==0)|(pdfdocy!=pdfobjword)|(pdfdocn!=pdfdocb+1)
+			ret 0 pdfdocn
+		end
+		loadb pdfdocb as pdfdocc
+		ifz pdfdocdry
+			if (pdfdocc==110)&(pdfdocoff>0)
+				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocinfile pdfdocoff pdfdocg
+			else
+				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocfree 0 0
+			end
+		end
+		pdfdoca=pdfdocn
+		pdfdoci+=1
+	end
+	jmp sub
+end
+
+# Take from the trailer dictionary at pdfdoca what a document needs: the
+# catalog and whether the file is encrypted, if this is the newest
+# trailer, and the offset of the section before, which is the result,
+# 0 if there is none.
+fn pdfdoctrailer pdfdocd pdfdoca
+	load pdfdocd+8 as pdfdoce
+	load pdfdocd+64 as pdfdoct
+	ifz pdfdoct
+		store pdfdocd+64 pdfdoca
+		# a value null is as no key
+		call pdfobjget pdfdoca pdfdoce "Encrypt" as pdfdocv
+		if pdfdocv
+			call pdfobjtok pdfdocv pdfdoce as pdfdock pdfdocn
+			call pdfdocword pdfdocv pdfdocn "null" as pdfdocw
+			ifz pdfdocw
+				call pdfdocfail pdfdocd pdfdoclocked
+				ret 0
+			end
+		end
+		call pdfobjget pdfdoca pdfdoce "Root" as pdfdocv
+		if pdfdocv
+			call pdfobjref pdfdocv pdfdoce as pdfdocw pdfdocx pdfdocy
+			if pdfdocw
+				store pdfdocd+56 pdfdocx
+				store pdfdocd+104 pdfdocy
+			end
+		end
+	end
+	call pdfobjget pdfdoca pdfdoce "Prev" as pdfdocv
+	ifz pdfdocv
+		ret 0
+	end
+	call pdfobjint pdfdocv pdfdoce as pdfdocx pdfdocw
+	ret pdfdocx
+end
+
+# the address of the value of the object that starts at pdfdoca, after its
+# two numbers and "obj", its number and its generation; 0, 0 and 0 if
+# no object starts there, or if no work is left for the bytes that
+# were looked at, which count whether an object is there or not
+fn pdfdochead pdfdocd pdfdoca pdfdoce
+	pdfdocs=pdfdoca
+	call pdfobjskip pdfdoca pdfdoce as pdfdoca
+	call pdfobjint pdfdoca pdfdoce as pdfdocx pdfdocw
+	call pdfobjtok pdfdoca pdfdoce as pdfdock pdfdocn
+	call pdfobjskip pdfdocn pdfdoce as pdfdoca
+	call pdfobjint pdfdoca pdfdoce as pdfdocg pdfdock
+	call pdfobjtok pdfdoca pdfdoce as pdfdocy pdfdocn
+	call pdfobjskip pdfdocn pdfdoce as pdfdoca
+	call pdfobjtok pdfdoca pdfdoce as pdfdocy pdfdocn
+	call pdfdocword pdfdoca pdfdocn "obj" as pdfdocc
+	call pdfobjskip pdfdocn pdfdoce as pdfdoca
+	call pdfdocspend pdfdocd pdfdoca-pdfdocs>>4 as pdfdocy
+	if (pdfdocw==0)|(pdfdock==0)|(pdfdocc==0)|(pdfdocy==0)
+		ret 0 0 0
+	end
+	ret pdfdoca pdfdocx pdfdocg
+end
+
+# the pdfdock bytes at pdfdocq as a number, the first byte highest
+fn pdfdocbe pdfdocq pdfdock
+	pdfdocv=0
+	while pdfdock
+		loadb pdfdocq as pdfdocc
+		pdfdocv=pdfdocv<<8|pdfdocc
+		pdfdocq+=1
+		pdfdock-=1
+	end
+	ret pdfdocv
+end
+
+# Read the entries of the cross reference stream whose dictionary is at
+# pdfdoca: 1, or 0.
+fn pdfdocxstream pdfdocd pdfdoca
+	local pdfdocb 24
+	store pdfdocb 0
+	store pdfdocb+8 0
+	store pdfdocb+16 0
+	load pdfdocd+8 as pdfdoce
+	# the widths of the three fields of an entry
+	call pdfobjget pdfdoca pdfdoce "W" as pdfdocv
+	jz pdfdocv bad
+	call pdfobjfirst pdfdocv pdfdoce as pdfdocv
+	jz pdfdocv bad
+	call pdfobjint pdfdocv pdfdoce as pdfdocw1 pdfdocx
+	call pdfobjnext pdfdocv pdfdoce as pdfdocv
+	jz pdfdocv bad
+	call pdfobjint pdfdocv pdfdoce as pdfdocw2 pdfdocy
+	call pdfobjnext pdfdocv pdfdoce as pdfdocv
+	jz pdfdocv bad
+	call pdfobjint pdfdocv pdfdoce as pdfdocw3 pdfdocc
+	if (pdfdocx==0)|(pdfdocy==0)|(pdfdocc==0)|(pdfdocw1>8)|(pdfdocw2>8)|(pdfdocw3>8)|(pdfdocw1+pdfdocw2+pdfdocw3==0)
+		jmp bad
+	end
+	pdfdocw=pdfdocw1+pdfdocw2+pdfdocw3
+	call pdfstmdata pdfdocd pdfdoca pdfdoce pdfdocb as pdfdocr
+	jnz pdfdocr bad
+	load pdfdocb as pdfdocq
+	load pdfdocb+8 as pdfdocn
+	# the runs of numbers: pairs in Index, or all up to Size
+	call pdfobjget pdfdoca pdfdoce "Size" as pdfdocv
+	pdfdocfirst=0
+	pdfdoccount=0
+	if pdfdocv
+		call pdfobjint pdfdocv pdfdoce as pdfdoccount pdfdocx
+	end
+	call pdfobjget pdfdoca pdfdoce "Index" as pdfdocix
+	if pdfdocix
+		call pdfobjfirst pdfdocix pdfdoce as pdfdocix
+		jz pdfdocix bad
+	end
+	label sub
+	if pdfdocix
+		call pdfobjtok pdfdocix pdfdoce as pdfdock pdfdocm
+		jeq pdfdock pdfobjarrend ok
+		call pdfobjint pdfdocix pdfdoce as pdfdocfirst pdfdocx
+		call pdfobjnext pdfdocix pdfdoce as pdfdocix
+		jz pdfdocix bad
+		call pdfobjint pdfdocix pdfdoce as pdfdoccount pdfdocy
+		call pdfobjnext pdfdocix pdfdoce as pdfdocix
+		jz pdfdocix bad
+		if (pdfdocx==0)|(pdfdocy==0)
+			jmp bad
+		end
+	end
+	if (pdfdocfirst>pdfdocmost)|(pdfdoccount>pdfdocmost)|(pdfdoccount*pdfdocw>pdfdocn)
+		jmp bad
+	end
+	call pdfdocroom pdfdocd pdfdocfirst+pdfdoccount as pdfdocx
+	jz pdfdocx bad
+	call pdfdocspend pdfdocd pdfdoccount+1 as pdfdocx
+	jz pdfdocx bad
+	pdfdoci=0
+	while pdfdoci<pdfdoccount
+		pdfdock=1
+		if pdfdocw1
+			call pdfdocbe pdfdocq pdfdocw1 as pdfdock
+		end
+		call pdfdocbe pdfdocq+pdfdocw1 pdfdocw2 as pdfdocx
+		call pdfdocbe pdfdocq+pdfdocw1+pdfdocw2 pdfdocw3 as pdfdocy
+		ifz pdfdock
+			call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocfree 0 0
+		end
+		if pdfdock==1
+			if pdfdocx
+				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocinfile pdfdocx pdfdocy
+			else
+				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocfree 0 0
+			end
+		end
+		if (pdfdock==2)&(pdfdocx<pdfdocmost)&(pdfdocy<=0xffffffff)
+			call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocinstream pdfdocx<<32|pdfdocy 0
+		end
+		pdfdocq+=pdfdocw
+		pdfdoci+=1
+	end
+	pdfdocn-=pdfdoccount*pdfdocw
+	jnz pdfdocix sub
+	label ok
+	call byfree pdfdocb
+	ret 1
+	label bad
+	call byfree pdfdocb
+	ret 0
+end
+
+fn pdfdocopen pdfdocp pdfdocn pdfdocd pdfdocwork pdfdoccap
+	local pdfdocseen 24
+	store pdfdocseen 0
+	store pdfdocseen+8 0
+	store pdfdocseen+16 0
+	pdfdoci=0
+	while pdfdoci<pdfdocsize
+		store pdfdocd+pdfdoci 0
+		pdfdoci+=8
+	end
+	pdfdoce=pdfdocp+pdfdocn
+	store pdfdocd pdfdocp
+	store pdfdocd+8 pdfdoce
+	store pdfdocd+32 pdfdocwork
+	store pdfdocd+40 pdfdoccap
+	# the header, in the first 1024 bytes
+	pdfdoca=pdfdoce
+	if pdfdocn>1024
+		pdfdoca=pdfdocp+1024
+	end
+	call pdfdoclast pdfdocp pdfdoca "%PDF-" as pdfdoca
+	jz pdfdoca bad
+	pdfdoca=pdfdocp
+	if pdfdocn>2048
+		pdfdoca=pdfdoce-2048
+	end
+	call pdfdoclast pdfdoca pdfdoce "startxref" as pdfdoca
+	jz pdfdoca bad
+	call pdfobjskip pdfdoca+9 pdfdoce as pdfdoca
+	call pdfobjint pdfdoca pdfdoce as pdfdocoff pdfdocw
+	jz pdfdocw bad
+	# a section, and then the one that its trailer names as the one
+	# before, each once
+	label section
+	jge pdfdocoff pdfdocn bad
+	load pdfdocseen as pdfdocq
+	load pdfdocseen+8 as pdfdocm
+	pdfdoci=0
+	while pdfdoci<pdfdocm
+		load pdfdocq+pdfdoci as pdfdocx
+		jeq pdfdocx pdfdocoff done
+		pdfdoci+=8
+	end
+	jgt pdfdocm 32768 done
+	call byneed pdfdocseen 8 as pdfdocw
+	jz pdfdocw nomem
+	load pdfdocseen as pdfdocq
+	store pdfdocq+pdfdocm pdfdocoff
+	store pdfdocseen+8 pdfdocm+8
+	call pdfdocspend pdfdocd 16 as pdfdocw
+	jz pdfdocw bad
+	call pdfobjskip pdfdocp+pdfdocoff pdfdoce as pdfdoca
+	call pdfobjtok pdfdoca pdfdoce as pdfdock pdfdocm
+	call pdfdocword pdfdoca pdfdocm "xref" as pdfdocw
+	if pdfdocw
+		# the trailer first: it may name a stream with the objects that
+		# the table of this section says are free, and those are read
+		# before the table, which then does not hide them
+		pdfdocb=pdfdocm
+		call pdfdoctable pdfdocd pdfdocb 1 as pdfdoca
+		jz pdfdoca bad
+		call pdfobjtok pdfdoca pdfdoce as pdfdock pdfdocm
+		jne pdfdock pdfobjdict bad
+		call pdfobjget pdfdoca pdfdoce "XRefStm" as pdfdocv
+		if pdfdocv
+			call pdfobjint pdfdocv pdfdoce as pdfdocx pdfdocw
+			if pdfdocw&(pdfdocx<pdfdocn)
+				call pdfdochead pdfdocd pdfdocp+pdfdocx pdfdoce as pdfdocv pdfdocx pdfdocy
+				if pdfdocv
+					call pdfdocxstream pdfdocd pdfdocv
+				end
+			end
+		end
+		call pdfdoctable pdfdocd pdfdocb 0 as pdfdoca
+		jz pdfdoca bad
+	else
+		# a cross reference stream, which is an object
+		call pdfdochead pdfdocd pdfdoca pdfdoce as pdfdoca pdfdocx pdfdocy
+		jz pdfdoca bad
+		call pdfobjtok pdfdoca pdfdoce as pdfdock pdfdocm
+		jne pdfdock pdfobjdict bad
+		call pdfdocxstream pdfdocd pdfdoca as pdfdocw
+		jz pdfdocw bad
+	end
+	call pdfdoctrailer pdfdocd pdfdoca as pdfdocoff
+	jnz pdfdocoff section
+	label done
+	call byfree pdfdocseen
+	call pdfdocerr pdfdocd as pdfdocr
+	jnz pdfdocr close
+	# the catalog is a dictionary
+	load pdfdocd+56 as pdfdocx
+	load pdfdocd+104 as pdfdocy
+	call pdfdocref pdfdocd pdfdocx pdfdocy as pdfdoca pdfdocm
+	jz pdfdoca bad2
+	call pdfobjtok pdfdoca pdfdocm as pdfdock pdfdocm
+	jne pdfdock pdfobjdict bad2
+	call pdfdocerr pdfdocd as pdfdocr
+	jnz pdfdocr close
+	ret 0
+	label nomem
+	call pdfdocfail pdfdocd pdfdocmem
+	label bad
+	call byfree pdfdocseen
+	label bad2
+	call pdfdocfail pdfdocd pdfdocbad
+	call pdfdocerr pdfdocd as pdfdocr
+	label close
+	call pdfdocclose pdfdocd
+	ret pdfdocr
+end
+
+# The value of the object pdfdocnum if its generation is pdfdocg, as pdfdocobj gives
+# it; 0 and 0 if the object has another generation.
+fn pdfdocref pdfdocd pdfdocnum pdfdocg
+	load pdfdocd+24 as pdfdocs
+	if pdfdocnum>=pdfdocs
+		ret 0 0
+	end
+	load pdfdocd+16 as pdfdoct
+	pdfdoct+=pdfdocnum*16
+	load pdfdoct as pdfdock
+	if pdfdock>>32!=pdfdocg
+		ret 0 0
+	end
+	tail pdfdocobj pdfdocd pdfdocnum
+end
+
+# The value of the object with the number pdfdocnum, whatever its generation:
+# the address of its first byte and the one after the bytes it lies
+# in; 0 and 0 if the document has no such object, or if what the table
+# points to is not that object of the generation of the table.
+fn pdfdocobj pdfdocd pdfdocnum
+	load pdfdocd+24 as pdfdocs
+	if pdfdocnum>=pdfdocs
+		ret 0 0
+	end
+	call pdfdocspend pdfdocd 4 as pdfdocw
+	ifz pdfdocw
+		ret 0 0
+	end
+	load pdfdocd+16 as pdfdoct
+	pdfdoct+=pdfdocnum*16
+	load pdfdoct as pdfdock
+	load pdfdoct+8 as pdfdocv
+	load pdfdocd as pdfdocp
+	load pdfdocd+8 as pdfdoce
+	if pdfdock&255==pdfdocinfile
+		if pdfdocv>=pdfdoce-pdfdocp
+			ret 0 0
+		end
+		call pdfdochead pdfdocd pdfdocp+pdfdocv pdfdoce as pdfdoca pdfdocx pdfdocy
+		if (pdfdoca==0)|(pdfdocx!=pdfdocnum)|(pdfdocy!=pdfdock>>32)
+			ret 0 0
+		end
+		ret pdfdoca pdfdoce
+	end
+	if pdfdock&255==pdfdocinstream
+		tail pdfdocpacked pdfdocd pdfdocnum pdfdocv>>32 pdfdocv&0xffffffff
+	end
+	ret 0 0
+end
+
+# The value of the object pdfdocnum, which is the one at the place pdfdocidx of
+# the object stream pdfdocsn: as pdfdocobj gives it.
+fn pdfdocpacked pdfdocd pdfdocnum pdfdocsn pdfdocidx
+	local pdfdocb 48
+	load pdfdocd+24 as pdfdocs
+	if pdfdocsn>=pdfdocs
+		ret 0 0
+	end
+	load pdfdocd+16 as pdfdoct
+	pdfdoct+=pdfdocsn*16
+	load pdfdoct as pdfdock
+	if pdfdock&255!=pdfdocinfile
+		ret 0 0
+	end
+	pdfdocslot=(pdfdock>>8)&0xffffff
+	if pdfdocslot==pdfdocfailed
+		ret 0 0
+	end
+	ifz pdfdocslot
+		# unpack it once; while that is done it is as if it had failed,
+		# for a stream that needs an object of itself
+		load pdfdocd+96 as pdfdocx
+		if pdfdocx>=16
+			ret 0 0
+		end
+		store pdfdocd+96 pdfdocx+1
+		store pdfdoct pdfdock|(pdfdocfailed<<8)
+		load pdfdocd as pdfdocp
+		load pdfdocd+8 as pdfdoce
+		load pdfdoct+8 as pdfdocv
+		pdfdoci=0
+		while pdfdoci<48
+			store pdfdocb+pdfdoci 0
+			pdfdoci+=8
+		end
+		pdfdocr=1
+		if pdfdocv<pdfdoce-pdfdocp
+			call pdfdochead pdfdocd pdfdocp+pdfdocv pdfdoce as pdfdoca pdfdocx pdfdocy
+			if pdfdoca
+				call pdfstmdata pdfdocd pdfdoca pdfdoce pdfdocb as pdfdocr
+				ifz pdfdocr
+					call pdfstmparm pdfdocd pdfdoca pdfdoce "N" 0 as pdfdocx
+					call pdfstmparm pdfdocd pdfdoca pdfdoce "First" 0 as pdfdocy
+					store pdfdocb+24 pdfdocx
+					store pdfdocb+32 pdfdocy
+				end
+			end
+		end
+		load pdfdocd+96 as pdfdocx
+		store pdfdocd+96 pdfdocx-1
+		# its bytes are kept, and count
+		load pdfdocb+16 as pdfdocc
+		load pdfdocd+40 as pdfdocm
+		ifz pdfdocr
+			if pdfdocc>pdfdocm
+				call pdfdocfail pdfdocd pdfdocspent
+				pdfdocr=1
+			end
+		end
+		ifz pdfdocr
+			call byadd pdfdocd+72 pdfdocb 48 as pdfdocw
+			ifz pdfdocw
+				call pdfdocfail pdfdocd pdfdocmem
+				pdfdocr=1
+			end
+		end
+		if pdfdocr
+			call byfree pdfdocb
+			ret 0 0
+		end
+		store pdfdocd+40 pdfdocm-pdfdocc
+		load pdfdocd+80 as pdfdocslot
+		pdfdocslot/=48
+		# the table has not moved: only pdfdocopen makes it longer
+		store pdfdoct pdfdock|(pdfdocslot<<8)
+	end
+	load pdfdocd+72 as pdfdocq
+	pdfdocq+=pdfdocslot*48-48
+	load pdfdocq as pdfdoca
+	load pdfdocq+8 as pdfdocn
+	load pdfdocq+24 as pdfdocx
+	load pdfdocq+32 as pdfdocy
+	if (pdfdocidx>=pdfdocx)|(pdfdocy>pdfdocn)
+		ret 0 0
+	end
+	# the pairs before the objects: a number and where its object
+	# starts, counted from the first
+	pdfdoce=pdfdoca+pdfdocy
+	pdfdocp=pdfdoca
+	pdfdoci=0
+	label pair
+	call pdfobjskip pdfdocp pdfdoce as pdfdocp
+	call pdfobjint pdfdocp pdfdoce as pdfdocx pdfdocw
+	call pdfobjtok pdfdocp pdfdoce as pdfdock pdfdocm
+	call pdfobjskip pdfdocm pdfdoce as pdfdocp
+	call pdfobjint pdfdocp pdfdoce as pdfdocv pdfdocc
+	call pdfobjtok pdfdocp pdfdoce as pdfdock pdfdocm
+	if (pdfdocw!=0)&(pdfdocc!=0)&(pdfdoci<pdfdocidx)
+		pdfdocp=pdfdocm
+		pdfdoci+=1
+		jmp pair
+	end
+	# what was looked at counts, whether the pair is there or not
+	call pdfdocspend pdfdocd (pdfdocm-pdfdoca>>4)+pdfdocidx+1 as pdfdocs
+	if (pdfdocw==0)|(pdfdocc==0)|(pdfdocs==0)
+		ret 0 0
+	end
+	if (pdfdocx!=pdfdocnum)|(pdfdocv>pdfdocn-pdfdocy)
+		ret 0 0
+	end
+	pdfdoce=pdfdoca+pdfdocn
+	call pdfobjskip pdfdoca+pdfdocy+pdfdocv pdfdoce as pdfdoca
+	ret pdfdoca pdfdoce
+end
+
+# The value at pdfdoca if it is no reference, and else the value of the
+# object it refers to, and so on: its address and the one after its
+# bytes. A reference to no object, to an object of another generation,
+# or one after 32 others, is the value null.
+fn pdfdocderef pdfdocd pdfdoca pdfdoce
+	pdfdoci=0
+	label more
+	call pdfobjref pdfdoca pdfdoce as pdfdocw pdfdocx pdfdocy
+	ifz pdfdocw
+		ret pdfdoca pdfdoce
+	end
+	pdfdoci+=1
+	if pdfdoci<=32
+		call pdfdocref pdfdocd pdfdocx pdfdocy as pdfdoca pdfdoce
+		jnz pdfdoca more
+	end
+	ret pdfdocnull pdfdocnull+4
+end
+
+# The value that the dictionary at pdfdoca has for the key of the pdfdockn bytes
+# at pdfdockp, or the one that value refers to: its address and the one
+# after its bytes, or 0 and 0 if the dictionary has no such key, or
+# has null for it.
+fn pdfdocget pdfdocd pdfdoca pdfdoce pdfdockp pdfdockn
+	call pdfobjget pdfdoca pdfdoce pdfdockp pdfdockn as pdfdocv
+	if pdfdocv
+		call pdfdocspend pdfdocd (pdfdocv-pdfdoca>>4)+1 as pdfdocw
+		ifz pdfdocw
+			ret 0 0
+		end
+		# a value null, also the one of a reference to no object, is as
+		# no key (7.3.9)
+		call pdfdocderef pdfdocd pdfdocv pdfdoce as pdfdocv pdfdoce
+		call pdfobjtok pdfdocv pdfdoce as pdfdock pdfdocn
+		call pdfdocword pdfdocv pdfdocn "null" as pdfdocw
+		if pdfdocw
+			ret 0 0
+		end
+		ret pdfdocv pdfdoce
+	end
+	# what was looked at for nothing: the dictionary, or all the bytes
+	# if it does not end
+	call pdfobjvalue pdfdoca pdfdoce as pdfdocv
+	ifz pdfdocv
+		pdfdocv=pdfdoce
+	end
+	call pdfdocspend pdfdocd (pdfdocv-pdfdoca>>4)+1
+	ret 0 0
+end
+
+fn pdfdocclose pdfdocd
+	load pdfdocd+16 as pdfdoca
+	load pdfdocd+24 as pdfdocs
+	call pdfdocrelease pdfdocd pdfdoca pdfdocs*16
+	store pdfdocd+16 0
+	store pdfdocd+24 0
+	load pdfdocd+72 as pdfdocq
+	load pdfdocd+80 as pdfdocn
+	pdfdoci=0
+	while pdfdoci<pdfdocn
+		load pdfdocq+pdfdoci as pdfdoca
+		load pdfdocq+pdfdoci+16 as pdfdocs
+		call pdfdocrelease pdfdocd pdfdoca pdfdocs
+		pdfdoci+=48
+	end
+	call byfree pdfdocd+72
+end

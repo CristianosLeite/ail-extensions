@@ -1,0 +1,559 @@
+# pdf/src/pdfstm.aiw -- the bytes of a stream of a PDF file (ISO
+# 32000-1, 7.3.8 and 7.4), as its filters packed them and as they were
+# before.
+#
+#   pdfstmraw d a e        where the bytes of the stream are in the file
+#   pdfstmdata d a e out   those bytes with the filters undone, added to out
+#
+# d is a document of pdf/src/pdfdoc.aiw and a the address of the
+# dictionary of a stream object in the bytes of the file, as pdfdocobj
+# gives it; out is a buffer of lib/std/bytes.aiw. pdfstmraw returns the
+# address and the number of the bytes, or 0 and 0 if the object is no
+# stream. pdfstmdata returns 0, or a negative number, and then out is
+# as it was:
+#
+#   pdfstmfilter   -95  a filter that is not one of FlateDecode,
+#                  ASCIIHexDecode and ASCII85Decode, or a predictor
+#                  that is not one of 1, 2 with 8 bits a component and
+#                  10 to 15
+#   pdfstmbad       -5  no stream, or bytes that the filter cannot read
+#
+# or the error of the document, if its work or its memory is used up
+# (pdfdocspent), or the kernel has none (pdfdocmem).
+#
+# What pdfstmdata adds to out is the caller's to count as memory, with
+# pdfdochold, if it keeps more than one such buffer at a time.
+#
+# The length of the bytes is the one the dictionary says, if the word
+# endstream follows them there; else they end before the first
+# endstream. Data of FlateDecode whose Adler-32 is wrong or missing is
+# taken if its last block ends. A row of a predictor that the bytes end
+# in is left out. What a filter unpacks to, and what is added to out,
+# is at most the memory the document has left; the bytes it reads and the bytes it gives count as
+# work, and so do the tables of each block of FlateDecode.
+#
+# Every name of this file starts with "pdfstm"; a program has no var
+# of such a name (see lib/std/io.aiw).
+use "lib/std/bytes.aiw"
+use "pdf/src/inflate.aiw"
+use "pdf/src/pdfobj.aiw"
+use "pdf/src/pdfdoc.aiw"
+
+const pdfstmfilter -95
+const pdfstmbad -5
+
+# the address of the first place where the pdfstmkn bytes at pdfstmkp are among
+# those from pdfstma to pdfstme, or 0
+fn pdfstmfind pdfstma pdfstme pdfstmkp pdfstmkn
+	label more
+	if pdfstme-pdfstma<pdfstmkn
+		ret 0
+	end
+	pdfstmi=0
+	label same
+	if pdfstmi<pdfstmkn
+		loadb pdfstma+pdfstmi as pdfstmx
+		loadb pdfstmkp+pdfstmi as pdfstmy
+		if pdfstmx==pdfstmy
+			pdfstmi+=1
+			jmp same
+		end
+		pdfstma+=1
+		jmp more
+	end
+	ret pdfstma
+end
+
+fn pdfstmraw pdfstmd pdfstma pdfstme
+	call pdfobjvalue pdfstma pdfstme as pdfstmm
+	ifz pdfstmm
+		ret 0 0
+	end
+	# what lies between the parts of a stream is looked at each time
+	# it is read, and counts
+	call pdfobjskip pdfstmm pdfstme as pdfstmb
+	call pdfobjtok pdfstmb pdfstme as pdfstmk pdfstmn
+	call pdfdocword pdfstmb pdfstmn "stream" as pdfstmw
+	call pdfdocspend pdfstmd pdfstmb-pdfstmm>>4 as pdfstmx
+	if (pdfstmw==0)|(pdfstmx==0)
+		ret 0 0
+	end
+	# the end of the line after the word is no byte of the stream
+	if pdfstmn<pdfstme
+		loadb pdfstmn as pdfstmc
+		if pdfstmc==13
+			pdfstmn+=1
+			if pdfstmn<pdfstme
+				loadb pdfstmn as pdfstmc
+			end
+		end
+		if pdfstmc==10
+			pdfstmn+=1
+		end
+	end
+	call pdfdocget pdfstmd pdfstma pdfstme "Length" as pdfstmv pdfstmve
+	if pdfstmv
+		call pdfobjint pdfstmv pdfstmve as pdfstml pdfstmw
+		if pdfstmw&(pdfstml<=pdfstme-pdfstmn)
+			call pdfobjskip pdfstmn+pdfstml pdfstme as pdfstmb
+			call pdfobjtok pdfstmb pdfstme as pdfstmk pdfstmm
+			call pdfdocword pdfstmb pdfstmm "endstream" as pdfstmw
+			call pdfdocspend pdfstmd pdfstmb-pdfstmn-pdfstml>>4 as pdfstmx
+			ifz pdfstmx
+				ret 0 0
+			end
+			if pdfstmw
+				ret pdfstmn pdfstml
+			end
+		end
+	end
+	call pdfstmfind pdfstmn pdfstme "endstream" as pdfstmb
+	ifz pdfstmb
+		# looked for to the end of the file, which is work too
+		call pdfdocspend pdfstmd (pdfstme-pdfstmn>>4)+1
+		ret 0 0
+	end
+	call pdfdocspend pdfstmd (pdfstmb-pdfstmn>>4)+1 as pdfstmw
+	ifz pdfstmw
+		ret 0 0
+	end
+	# without the end of the line before the word
+	if pdfstmb>pdfstmn
+		loadb pdfstmb-1 as pdfstmc
+		if pdfstmc==10
+			pdfstmb-=1
+			if pdfstmb>pdfstmn
+				loadb pdfstmb-1 as pdfstmc
+			end
+		end
+		if (pdfstmc==13)&(pdfstmb>pdfstmn)
+			pdfstmb-=1
+		end
+	end
+	ret pdfstmn pdfstmb-pdfstmn
+end
+
+# add the bytes that the pdfstmn bytes at pdfstmp write in hexadecimal, up to a
+# ">", pdfstmmax at most: 0, or an error
+fn pdfstmhex pdfstmp pdfstmn pdfstmb pdfstmmax
+	load pdfstmb+8 as pdfstmw
+	pdfstmmax+=pdfstmw
+	pdfstmv=0-1
+	pdfstmi=0
+	label more
+	if pdfstmi<pdfstmn
+		loadb pdfstmp+pdfstmi as pdfstmc
+		pdfstmi+=1
+		if pdfstmc!=62
+			call pdfobjdigit pdfstmc as pdfstmx
+			if pdfstmx<16
+				ifslt pdfstmv 0
+					pdfstmv=pdfstmx
+				else
+					load pdfstmb+8 as pdfstmw
+					if pdfstmw>=pdfstmmax
+						ret pdfdocspent
+					end
+					call byaddb pdfstmb pdfstmv*16+pdfstmx as pdfstmw
+					jz pdfstmw nomem
+					pdfstmv=0-1
+				end
+			else
+				call pdfobjwhite pdfstmc as pdfstmw
+				jz pdfstmw bad
+			end
+			jmp more
+		end
+	end
+	ifsge pdfstmv 0
+		load pdfstmb+8 as pdfstmw
+		if pdfstmw>=pdfstmmax
+			ret pdfdocspent
+		end
+		call byaddb pdfstmb pdfstmv*16 as pdfstmw
+		jz pdfstmw nomem
+	end
+	ret 0
+	label bad
+	ret pdfstmbad
+	label nomem
+	ret pdfdocmem
+end
+
+# add the bytes that the pdfstmn bytes at pdfstmp write in base 85, up to a "~>",
+# pdfstmmax at most: 0, or an error
+fn pdfstma85 pdfstmp pdfstmn pdfstmb pdfstmmax
+	load pdfstmb+8 as pdfstmx
+	pdfstmmax+=pdfstmx
+	pdfstmi=0
+	# the "<~" that some writers put before
+	if pdfstmn>=2
+		load2 pdfstmp as pdfstmc
+		if pdfstmc==0x7e3c
+			pdfstmi=2
+		end
+	end
+	pdfstmv=0
+	pdfstmk=0
+	label more
+	if pdfstmi<pdfstmn
+		loadb pdfstmp+pdfstmi as pdfstmc
+		pdfstmi+=1
+		if pdfstmc==126
+			jmp last
+		end
+		call pdfobjwhite pdfstmc as pdfstmw
+		jnz pdfstmw more
+		load pdfstmb+8 as pdfstmx
+		if pdfstmx>pdfstmmax
+			ret pdfdocspent
+		end
+		if (pdfstmc==122)&(pdfstmk==0)
+			call byadd pdfstmb "\0\0\0\0" as pdfstmw
+			jz pdfstmw nomem
+			jmp more
+		end
+		if (pdfstmc<33)|(pdfstmc>117)
+			ret pdfstmbad
+		end
+		pdfstmv=pdfstmv*85+pdfstmc-33
+		pdfstmk+=1
+		if pdfstmk==5
+			if pdfstmv>0xffffffff
+				ret pdfstmbad
+			end
+			# room for the four first, so that none of them fails
+			call byneed pdfstmb 4 as pdfstmw
+			jz pdfstmw nomem
+			call byaddb pdfstmb pdfstmv>>24
+			call byaddb pdfstmb pdfstmv>>16&255
+			call byaddb pdfstmb pdfstmv>>8&255
+			call byaddb pdfstmb pdfstmv&255
+			pdfstmv=0
+			pdfstmk=0
+		end
+		jmp more
+	end
+	label last
+	# two to four characters at the end are one to three bytes
+	if pdfstmk==1
+		ret pdfstmbad
+	end
+	if pdfstmk
+		pdfstmx=pdfstmk
+		while pdfstmx<5
+			pdfstmv=pdfstmv*85+84
+			pdfstmx+=1
+		end
+		if pdfstmv>0xffffffff
+			ret pdfstmbad
+		end
+		pdfstmx=24
+		while pdfstmk>1
+			call byaddb pdfstmb pdfstmv>>pdfstmx&255 as pdfstmw
+			jz pdfstmw nomem
+			pdfstmx-=8
+			pdfstmk-=1
+		end
+	end
+	ret 0
+	label nomem
+	ret pdfdocmem
+end
+
+# add the pdfstmn bytes at pdfstmp, rows that a predictor of PNG wrote, as they
+# were before: 0, or an error
+fn pdfstmpng pdfstmp pdfstmn pdfstmb pdfstmcolors pdfstmbpc pdfstmcolumns
+	pdfstmbpp=pdfstmcolors*pdfstmbpc+7>>3
+	pdfstmrow=pdfstmcolors*pdfstmbpc*pdfstmcolumns+7>>3
+	pdfstmrows=pdfstmn/(pdfstmrow+1)
+	call byneed pdfstmb pdfstmrows*pdfstmrow as pdfstmw
+	ifz pdfstmw
+		ret pdfdocmem
+	end
+	load pdfstmb as pdfstmq
+	load pdfstmb+8 as pdfstmlen
+	pdfstmq+=pdfstmlen
+	pdfstmr=0
+	while pdfstmr<pdfstmrows
+		pdfstms=pdfstmp+pdfstmr*(pdfstmrow+1)
+		loadb pdfstms as pdfstmt
+		if pdfstmt>4
+			ret pdfstmbad
+		end
+		pdfstms+=1
+		pdfstmo=pdfstmq+pdfstmr*pdfstmrow
+		pdfstmi=0
+		while pdfstmi<pdfstmrow
+			loadb pdfstms+pdfstmi as pdfstmx
+			# the byte to the left, the one above, the one above that
+			pdfstma=0
+			pdfstmu=0
+			pdfstmc=0
+			if pdfstmi>=pdfstmbpp
+				loadb pdfstmo+pdfstmi-pdfstmbpp as pdfstma
+			end
+			if pdfstmr
+				loadb pdfstmo+pdfstmi-pdfstmrow as pdfstmu
+				if pdfstmi>=pdfstmbpp
+					loadb pdfstmo+pdfstmi-pdfstmrow-pdfstmbpp as pdfstmc
+				end
+			end
+			if pdfstmt==1
+				pdfstmx+=pdfstma
+			end
+			if pdfstmt==2
+				pdfstmx+=pdfstmu
+			end
+			if pdfstmt==3
+				pdfstmx+=pdfstma+pdfstmu>>1
+			end
+			if pdfstmt==4
+				# the one of the three that is nearest to left + above
+				# - above left
+				pdfstmpa=pdfstmu-pdfstmc
+				ifslt pdfstmpa 0
+					pdfstmpa=0-pdfstmpa
+				end
+				pdfstmpb=pdfstma-pdfstmc
+				ifslt pdfstmpb 0
+					pdfstmpb=0-pdfstmpb
+				end
+				pdfstmpc=pdfstma+pdfstmu-pdfstmc-pdfstmc
+				ifslt pdfstmpc 0
+					pdfstmpc=0-pdfstmpc
+				end
+				if (pdfstmpa<=pdfstmpb)&(pdfstmpa<=pdfstmpc)
+					pdfstmx+=pdfstma
+				else
+					if pdfstmpb<=pdfstmpc
+						pdfstmx+=pdfstmu
+					else
+						pdfstmx+=pdfstmc
+					end
+				end
+			end
+			storeb pdfstmo+pdfstmi pdfstmx
+			pdfstmi+=1
+		end
+		pdfstmr+=1
+	end
+	store pdfstmb+8 pdfstmlen+pdfstmrows*pdfstmrow
+	ret 0
+end
+
+# the same for the predictor of TIFF with 8 bits a component: each
+# byte is the difference to the one pdfstmcolors before it in its row
+fn pdfstmtiff pdfstmp pdfstmn pdfstmb pdfstmcolors pdfstmcolumns
+	pdfstmrow=pdfstmcolors*pdfstmcolumns
+	pdfstmrows=pdfstmn/pdfstmrow
+	call byneed pdfstmb pdfstmrows*pdfstmrow as pdfstmw
+	ifz pdfstmw
+		ret pdfdocmem
+	end
+	load pdfstmb as pdfstmq
+	load pdfstmb+8 as pdfstmlen
+	pdfstmq+=pdfstmlen
+	pdfstmr=0
+	while pdfstmr<pdfstmrows
+		pdfstmi=0
+		while pdfstmi<pdfstmrow
+			loadb pdfstmp+pdfstmr*pdfstmrow+pdfstmi as pdfstmx
+			if pdfstmi>=pdfstmcolors
+				loadb pdfstmq+pdfstmr*pdfstmrow+pdfstmi-pdfstmcolors as pdfstma
+				pdfstmx+=pdfstma
+			end
+			storeb pdfstmq+pdfstmr*pdfstmrow+pdfstmi pdfstmx
+			pdfstmi+=1
+		end
+		pdfstmr+=1
+	end
+	store pdfstmb+8 pdfstmlen+pdfstmrows*pdfstmrow
+	ret 0
+end
+
+# The element pdfstmi, from 0, of the array at pdfstma, or the value it refers
+# to; if the value at pdfstma is no array, that value for pdfstmi 0. Its address
+# and the one after its bytes, or 0 and 0 if there is no such element.
+fn pdfstmnth pdfstmd pdfstma pdfstme pdfstmi
+	call pdfobjtok pdfstma pdfstme as pdfstmk pdfstmn
+	if pdfstmk!=pdfobjarr
+		if pdfstmi
+			ret 0 0
+		end
+		ret pdfstma pdfstme
+	end
+	call pdfobjfirst pdfstma pdfstme as pdfstma
+	label more
+	call pdfobjtok pdfstma pdfstme as pdfstmk pdfstmn
+	if (pdfstmk==pdfobjarrend)|(pdfstmk==pdfobjend)|(pdfstmk==pdfobjbad)
+		ret 0 0
+	end
+	ifz pdfstmi
+		tail pdfdocderef pdfstmd pdfstma pdfstme
+	end
+	call pdfobjnext pdfstma pdfstme as pdfstma
+	ifz pdfstma
+		ret 0 0
+	end
+	pdfstmi-=1
+	jmp more
+end
+
+# the integer that the dictionary at pdfstma has for a key, or pdfstmv if it has
+# none
+fn pdfstmparm pdfstmd pdfstma pdfstme pdfstmkp pdfstmkn pdfstmv
+	call pdfdocget pdfstmd pdfstma pdfstme pdfstmkp pdfstmkn as pdfstmx pdfstmxe
+	if pdfstmx
+		call pdfobjint pdfstmx pdfstmxe as pdfstmy pdfstmw
+		if pdfstmw
+			ret pdfstmy
+		end
+	end
+	ret pdfstmv
+end
+
+fn pdfstmdata pdfstmd pdfstma pdfstme pdfstmout
+	local pdfstmt1 24
+	local pdfstmt2 24
+	store pdfstmt1 0
+	store pdfstmt1+8 0
+	store pdfstmt1+16 0
+	store pdfstmt2 0
+	store pdfstmt2+8 0
+	store pdfstmt2+16 0
+	call pdfstmraw pdfstmd pdfstma pdfstme as pdfstmp pdfstmn
+	pdfstmr=pdfstmbad
+	jz pdfstmp done
+	call pdfdocget pdfstmd pdfstma pdfstme "Filter" as pdfstmf pdfstmfe
+	call pdfdocget pdfstmd pdfstma pdfstme "DecodeParms" as pdfstmdp pdfstmdpe
+	ifz pdfstmdp
+		call pdfdocget pdfstmd pdfstma pdfstme "DP" as pdfstmdp pdfstmdpe
+	end
+	# a filter after the other, each into the buffer that the bytes it
+	# reads are not in
+	pdfstmi=0
+	pdfstms=0
+	label next
+	jz pdfstmf end
+	call pdfstmnth pdfstmd pdfstmf pdfstmfe pdfstmi as pdfstmv pdfstmve
+	jz pdfstmv end
+	pdfstmr=pdfstmbad
+	jgt pdfstmi 15 done
+	call pdfobjtok pdfstmv pdfstmve as pdfstmk pdfstmm
+	jne pdfstmk pdfobjname done
+	pdfstmt=pdfstmt1
+	if pdfstms&1
+		pdfstmt=pdfstmt2
+	end
+	call bycut pdfstmt 0
+	pdfstms+=1
+	# what the filter reads is work, whatever it gives
+	call pdfdocspend pdfstmd (pdfstmn>>4)+1 as pdfstmw
+	jz pdfstmw done
+	pdfstmr=pdfstmfilter
+	call pdfobjis pdfstmv pdfstmm "FlateDecode" as pdfstmx
+	call pdfobjis pdfstmv pdfstmm "Fl" as pdfstmy
+	if pdfstmx|pdfstmy
+		load pdfstmd+40 as pdfstmmax
+		call inflatezlib pdfstmp pdfstmn pdfstmt pdfstmmax pdfstmd+32 as pdfstmr
+		if (pdfstmr==inflatebad)&(pdfstmn>2)
+			# a sum that is wrong or not there
+			call inflate pdfstmp+2 pdfstmn-2 pdfstmt pdfstmmax pdfstmd+32 as pdfstmr
+		end
+		if pdfstmr==inflatebig
+			call pdfdocfail pdfstmd pdfdocspent
+		end
+		if pdfstmr==inflatemem
+			call pdfdocfail pdfstmd pdfdocmem
+		end
+		ifslt pdfstmr 0
+			pdfstmr=pdfstmbad
+		else
+			pdfstmr=0
+		end
+		# the predictor, if the parameters of this filter name one
+		pdfstmx=0
+		pdfstmxe=0
+		if pdfstmdp
+			call pdfstmnth pdfstmd pdfstmdp pdfstmdpe pdfstmi as pdfstmx pdfstmxe
+		end
+		if (pdfstmr==0)&(pdfstmx!=0)
+			call pdfobjtok pdfstmx pdfstmxe as pdfstmk pdfstmy
+			if pdfstmk==pdfobjdict
+				call pdfstmparm pdfstmd pdfstmx pdfstmxe "Predictor" 1 as pdfstmpr
+				if pdfstmpr!=1
+					call pdfstmparm pdfstmd pdfstmx pdfstmxe "Colors" 1 as pdfstmco
+					call pdfstmparm pdfstmd pdfstmx pdfstmxe "BitsPerComponent" 8 as pdfstmbpc
+					call pdfstmparm pdfstmd pdfstmx pdfstmxe "Columns" 1 as pdfstmcl
+					load pdfstmt as pdfstmp
+					load pdfstmt+8 as pdfstmn
+					pdfstmt=pdfstmt1
+					if pdfstms&1
+						pdfstmt=pdfstmt2
+					end
+					call bycut pdfstmt 0
+					pdfstms+=1
+					pdfstmr=pdfstmfilter
+					if (pdfstmco>0)&(pdfstmco<=32)&(pdfstmcl>0)&(pdfstmcl<=1048576)&((pdfstmbpc==1)|(pdfstmbpc==2)|(pdfstmbpc==4)|(pdfstmbpc==8)|(pdfstmbpc==16))
+						if pdfstmpr>=10
+							call pdfstmpng pdfstmp pdfstmn pdfstmt pdfstmco pdfstmbpc pdfstmcl as pdfstmr
+						end
+						if (pdfstmpr==2)&(pdfstmbpc==8)
+							call pdfstmtiff pdfstmp pdfstmn pdfstmt pdfstmco pdfstmcl as pdfstmr
+						end
+					end
+				end
+			end
+		end
+	end
+	call pdfobjis pdfstmv pdfstmm "ASCIIHexDecode" as pdfstmx
+	call pdfobjis pdfstmv pdfstmm "AHx" as pdfstmy
+	if pdfstmx|pdfstmy
+		load pdfstmd+40 as pdfstmmax
+		call pdfstmhex pdfstmp pdfstmn pdfstmt pdfstmmax as pdfstmr
+	end
+	call pdfobjis pdfstmv pdfstmm "ASCII85Decode" as pdfstmx
+	call pdfobjis pdfstmv pdfstmm "A85" as pdfstmy
+	if pdfstmx|pdfstmy
+		load pdfstmd+40 as pdfstmmax
+		call pdfstma85 pdfstmp pdfstmn pdfstmt pdfstmmax as pdfstmr
+	end
+	jnz pdfstmr done
+	load pdfstmt as pdfstmp
+	load pdfstmt+8 as pdfstmn
+	call pdfdocspend pdfstmd (pdfstmn>>4)+1 as pdfstmw
+	pdfstmi+=1
+	jnz pdfstmw next
+	label end
+	pdfstmr=0
+	call pdfdocspend pdfstmd (pdfstmn>>4)+1 as pdfstmw
+	# what is added is at most the memory left, also bytes that no
+	# filter packed
+	load pdfstmd+40 as pdfstmmax
+	if pdfstmn>pdfstmmax
+		pdfstmr=pdfdocspent
+		pdfstmw=0
+	end
+	if pdfstmw
+		call byadd pdfstmout pdfstmp pdfstmn as pdfstmw
+		ifz pdfstmw
+			pdfstmr=pdfdocmem
+		end
+	end
+	label done
+	call byfree pdfstmt1
+	call byfree pdfstmt2
+	# no memory is an error of the document, whoever found it
+	if pdfstmr==pdfdocmem
+		call pdfdocfail pdfstmd pdfdocmem
+	end
+	if pdfstmr==pdfdocspent
+		call pdfdocfail pdfstmd pdfdocspent
+	end
+	call pdfdocerr pdfstmd as pdfstmx
+	if pdfstmx
+		ret pdfstmx
+	end
+	ret pdfstmr
+end

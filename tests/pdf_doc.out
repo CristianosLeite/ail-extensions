@@ -1,0 +1,109 @@
+# a table of one section
+open 0
+0: none
+1: <</Type /Catalog /Pages 2 0 R>>
+2: <</Type /Pages /Kids [] /Count 0>>
+3: (a string)
+4: 3 0 R
+5: none
+8388609: none
+1.Pages: <</Type /Pages /Kids [] /Count 0>>
+1.Type: /Catalog
+1.None: none
+3.Type: none
+4 -> (a string)
+3 -> (a string)
+err 0
+# a section after it: an object written again, one given up, two runs of numbers
+open 0
+1: <</Type /Catalog /Pages 2 0 R>>
+2: <</Type /Pages /Kids [] /Count 0 /New true>>
+3: none
+4 -> null
+1.Pages: <</Type /Pages /Kids [] /Count 0 /New true>>
+# a section that names itself as the one before
+open 0
+1: <</Type /Catalog /Pages 2 0 R>>
+# bytes before the header
+open 0
+3: (a string)
+# an entry that points to another object, one beyond the file, references in a circle, 32 and 33 in a row
+open 0
+3: none
+7: none
+8: none
+9: none
+5 -> null
+10 -> (end)
+43 -> null
+err 0
+# an encrypted file
+open -13
+# what is no PDF file
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+open -22
+# the work: 16 for the section, 6 for its entries, 7 each of the two times that the 113 bytes of the table are read, 4 for the catalog
+open -7
+open 0
+err 0
+1: none
+err -7
+2: none
+1.Type: none
+open 0
+1: <</Type /Catalog /Pages 2 0 R>>
+2: none
+err -7
+# the memory: 16 bytes an object
+open -7
+open 0
+1: <</Type /Catalog /Pages 2 0 R>>
+err 0
+# a number given to a new object by a later section: a reference with the old generation is to no object, one with the new to the object; an object whose own generation is not that of its entry; a catalog of another generation
+open 0
+3: (new)
+4 -> null
+5 -> (new)
+6: none
+err 0
+open -22
+# the bytes before the value of an object count as work, 16000 of them 1000, also where no object is
+open 0
+5: (far)
+err 0
+open 0
+5: none
+err -7
+open 0
+6: none
+err -7
+open 0
+6: none
+err 0
+# a table with 16000 bytes of white space in it: they count each of the two times, 1007 for the 16113 bytes
+open -7
+open 0
+err 0
+# null for a key is as no key: of Encrypt, and of a dictionary, also as what a reference to no object gives
+open 0
+5.A: none
+5.B: none
+5.C: (a string)
+5.D: none
+6 -> null
+err 0

@@ -1,0 +1,114 @@
+# tokens
+int:12 int:-3 int:+7 real:1.5 real:-.25 real:4. word:. word:+ word:- word:1.2.3 word:12a
+name:/Name name:/A#20B name:/ name:/a name:/b arr:[ name:/c arrend:]
+str:(a (b) c) str:(\() str:(x\\) hex:<48 65> dict:<< dictend:>> hex:< >
+word:true word:false word:null word:obj word:endobj word:R word:Tj word:{ word:x word:} int:1
+int:1 int:2
+int:1 int:2 str:(a) int:3 name:/b hex:<c> int:4
+bad:(abc
+bad:) int:1
+bad:> int:1
+bad:<4x bad:>
+bad:(a\
+
+
+# the end of a value
+6
+2
+2
+6
+1
+20
+15
+none
+none
+none
+none
+none
+none
+none
+512
+none
+4
+2
+3
+4
+3
+6
+# the value of a key
+/Page
+[1 0 R 2 0 R]
+2
+(x)
+<</Type /X>>
+7 0 R
+none
+none
+none
+none
+none
+1
+none
+none
+none
+1
+1
+none
+none
+5
+# the elements of an array
+1|/a|(s)|[2 3]|<</k 1>>|4 0 R|
+
+
+1|?
+none
+1|2|?
+# integers
+42 1
+-7 1
+0 1
+0 0
+0 0
+0 0
+123456789012345678 1
+-123456789012345678 1
+0 0
+# numbers, in thousandths
+1500 1
+-250 1
+4000 1
+3000 1
+0 1
+12345 1
+-999 1
+0 0
+0 0
+123456789012345678 1
+2500 1
+# references
+1 12 0
+0 0 0
+0 0 0
+0 0 0
+1 12 3
+1 12 0
+0 0 0
+# the bytes of a string
+<616263>
+<610a0d09080c28295c>
+<4107013000>
+<6162>
+<6162>
+<6162>
+<610a620a630a64>
+<617162>
+<6e6573746564202870292071>
+<>
+<48656c6c6f>
+<4860>
+<>
+none
+none
+<3839>
+<0a>
+<5334>

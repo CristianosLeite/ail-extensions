@@ -1,0 +1,298 @@
+# pdf/src/pdf.aiw, the text of the pages of a PDF file. First a file
+# that a Python program wrote object by object (tests/data/hand.pdf),
+# which also wrote what each page is to give, from the operators and
+# the fonts it put there: text shown and placed in each way, spaces and
+# line feeds that only the places say, each encoding of a font, a
+# ToUnicode CMap, forms inside one another, an inline image, and pages
+# that cannot be read between pages that can. Then files that
+# Ghostscript and cairo wrote (tests/data/make.sh), each with what it
+# is to have in its bytes: the text printed here was compared, page by
+# page, with what pdftotext of poppler gives, white space taken as one
+# space and ligatures as their letters. Then what a document may cost,
+# files made to cost much, and every file damaged in some thousand
+# ways, read within a time. The harness ends a test after 10 seconds.
+use "lib/std/io.aiw"
+use "lib/std/bytes.aiw"
+use "lib/std/file.aiw"
+use "lib/std/proc.aiw"
+use "pdf/src/pdf.aiw"
+buf d pdfsize
+buf f 24
+buf g 24
+buf out 24
+var t0 open
+fn num v
+	ifslt v 0
+		call print "-"
+		v=0-v
+	end
+	call putn v
+end
+# open the file at the path with much work and memory
+fn file p n
+	if open
+		call pdfclose d
+	end
+	call bycut f 0
+	call fileread p n f as r
+	load f as q
+	load f+8 as m
+	call pdfopen q m d 100000000 268435456 as r
+	call print "pages "
+	call num r
+	call print "\n"
+end
+# open it with the work w and the memory m
+fn cost p n w m
+	call bycut f 0
+	call fileread p n f as r
+	load f as q
+	load f+8 as k
+	call pdfopen q k d w m as r
+	call print "open "
+	call num r
+	call print "\n"
+end
+# the text of the page i, added to a buffer that has a byte "<"
+fn page i
+	call bycut out 0
+	call byaddb out 60
+	call pdfpage d i out as r
+	call print "page "
+	call putn i
+	call print ": "
+	call num r
+	call print " ["
+	load out as p
+	load out+8 as n
+	call print p+1 n-1
+	call print "]\n"
+end
+# the result of the page i alone
+fn count i
+	call bycut out 0
+	call pdfpage d i out as r
+	call print "page "
+	call putn i
+	call print ": "
+	call num r
+	call print "\n"
+end
+# the result of the page i, read into a buffer that has no room yet,
+# and whether its room is max bytes at most afterwards
+fn room i max
+	call byfree out
+	call pdfpage d i out as r
+	call print "page "
+	call putn i
+	call print ": "
+	call num r
+	load out+16 as c
+	if c<=max
+		call print ", room within "
+	else
+		call print ", room beyond "
+	end
+	call putn max
+	call print "\n"
+end
+# say that the file at the path p n has the bytes q m
+fn has p n q m
+	call bycut f 0
+	call fileread p n f as r
+	load f as a
+	load f+8 as k
+	call pdfstmfind a a+k q m as r
+	i=n
+	while i
+		loadb p+i-1 as c
+		if c==47
+			p+=i
+			n-=i
+			i=1
+		end
+		i-=1
+	end
+	call print p n
+	if r
+		call print " has "
+	else
+		call print " has not "
+	end
+	loadb q+m-1 as c
+	if c==10
+		m-=1
+	end
+	call print q m
+	call print "\n"
+end
+# read every page of the n bytes at p as a file, with little work
+fn read p n
+	call pdfopen p n d 3000000 67108864 as r
+	ifsgt r 0
+		i=1
+		while i<=r
+			call bycut out 0
+			call pdfpage d i out as x
+			i+=1
+		end
+	end
+	ifsge r 0
+		call pdfclose d
+	end
+end
+# the file at the path cut at every eleventh length, and with every
+# 53rd byte changed in three ways
+fn harm p n
+	call bycut f 0
+	call fileread p n f as r
+	load f as a
+	load f+8 as k
+	c=0
+	i=0
+	while i<k
+		call read a i
+		c+=1
+		i+=11
+	end
+	call bycut g 0
+	call byadd g a k
+	load g as b
+	i=0
+	while i<k
+		loadb b+i as x
+		storeb b+i x^1
+		call read b k
+		storeb b+i x^0x80
+		call read b k
+		storeb b+i 0
+		call read b k
+		storeb b+i x
+		c+=3
+		i+=53
+	end
+	i=n
+	while i
+		loadb p+i-1 as x
+		if x==47
+			p+=i
+			n-=i
+			i=1
+		end
+		i-=1
+	end
+	call print p n
+	call print ": "
+	call putn c
+	call print " files read\n"
+end
+fn clock
+	call procnow as t0
+end
+fn intime
+	call procnow as t
+	if t-t0<9000000000
+		call print "in time\n"
+	else
+		call print "too slow\n"
+	end
+end
+call print "# a file written by hand: the operators that show and place text, spaces and line feeds from the places, the encodings, ToUnicode, forms, an inline image, contents in two streams, pages below a node, pages that cannot be read among them, a kid that is no page and has a number all the same, names of resources written with a number sign, and a space that is taken back before any text\n"
+call file "tests/data/hand.pdf"
+call page 1
+call page 2
+call page 3
+call page 4
+call page 5
+call page 6
+call page 7
+call page 8
+call page 9
+call page 10
+call page 11
+call page 12
+call page 13
+call page 14
+call page 15
+call page 16
+call page 0
+call page 17
+call page 1
+call pdfclose d
+call print "# files of Ghostscript and of cairo: a table and ToUnicode, a cross reference stream with an object stream and no ToUnicode, object streams with fonts of two bytes\n"
+call has "tests/data/gs.pdf" "/ToUnicode"
+call has "tests/data/gs.pdf" "xref\n"
+call file "tests/data/gs.pdf"
+call page 1
+call page 2
+call pdfclose d
+call has "tests/data/gsobj.pdf" "/ObjStm"
+call has "tests/data/gsobj.pdf" "/XRef"
+call file "tests/data/gsobj.pdf"
+call page 1
+call page 2
+call pdfclose d
+call has "tests/data/cairo.pdf" "/ObjStm"
+call has "tests/data/cairo.pdf" "/XRef"
+call has "tests/data/cairo.pdf" "/ToUnicode"
+call file "tests/data/cairo.pdf"
+call page 1
+call page 2
+call pdfclose d
+call print "# the work a document may cost: this file takes 554 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so\n"
+call cost "tests/data/hand.pdf" 553 1000000
+call cost "tests/data/hand.pdf" 554 1000000
+call page 1
+call page 8
+call pdfclose d
+call cost "tests/data/hand.pdf" 964 1000000
+call page 1
+call page 8
+call page 1
+call pdfclose d
+call print "# the memory it may hold: 2000 bytes are too few for its objects and its pages\n"
+call cost "tests/data/hand.pdf" 100000 2000
+call print "# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; thirty kids a node of the page tree, sixty deep; a page of 1000 streams of 10000 blocks that unpack to nothing; before them a font whose ToUnicode CMap gives 250 characters to each of 65536 codes\n"
+call cost "tests/data/cmap.pdf" 2000000 67108864
+call page 1
+call pdfclose d
+call cost "tests/data/forms.pdf" 2000000 67108864
+call page 1
+call pdfclose d
+call cost "tests/data/streams.pdf" 2000000 67108864
+call page 1
+call pdfclose d
+call cost "tests/data/tree.pdf" 2000000 67108864
+call cost "tests/data/blocks.pdf" 2000000 67108864
+call page 1
+call pdfclose d
+call print "# the 400 streams again with work for all of them: they are held together, and 64 MiB of memory are not enough\n"
+call cost "tests/data/streams.pdf" 2000000000 67108864
+call page 1
+call pdfclose d
+call print "# a page tree 65 deep is no document, since its pages could not be numbered; 64 deep it is read\n"
+call cost "tests/data/deep64.pdf" 1000000 1000000
+call pdfclose d
+call cost "tests/data/deep65.pdf" 1000000 1000000
+call print "# the text of a page is at most the memory left: 256 lines of 64 bytes, with 12000 bytes, after which the buffer has not grown beyond twice that and 4096, and with a million\n"
+call cost "tests/data/text.pdf" 10000000 12000
+call room 1 28096
+call pdfclose d
+call cost "tests/data/text.pdf" 10000000 1000000
+call count 1
+call pdfclose d
+call print "# contents that are an array: one that a string without its end cuts short and one that the bytes end in are no contents, though a stream before could be read; between them a page of two streams; then contents that are null, which is a page of no text, and null for the resources of a page and for the filter of its stream, which are as not there\n"
+call file "tests/data/contents.pdf"
+call page 1
+call page 2
+call page 3
+call page 4
+call page 5
+call pdfclose d
+call print "# each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds\n"
+call clock
+call harm "tests/data/hand.pdf"
+call harm "tests/data/gs.pdf"
+call harm "tests/data/gsobj.pdf"
+call harm "tests/data/cairo.pdf"
+call intime

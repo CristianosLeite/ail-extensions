@@ -1,0 +1,244 @@
+# pdf/src/pdfobj.aiw: the tokens of bytes, with their kinds; where a
+# value ends, also one that is not well formed or lies too deep; the
+# value a dictionary has for a key; the elements of an array; integers
+# and numbers in thousandths with their limits; references; and the
+# bytes that a string writes, with every escape. What each line is to
+# print was written from ISO 32000-1 beside the bytes, not from a run.
+use "lib/std/io.aiw"
+use "lib/std/bytes.aiw"
+use "pdf/src/pdfobj.aiw"
+buf b 24
+data kinds "end\0\0\0\0\0" "int\0\0\0\0\0" "real\0\0\0\0" "name\0\0\0\0"
+data "str\0\0\0\0\0" "hex\0\0\0\0\0" "arr\0\0\0\0\0" "arrend\0\0"
+data "dict\0\0\0\0" "dictend\0" "word\0\0\0\0" "bad\0\0\0\0\0"
+fn num v
+	ifslt v 0
+		call print "-"
+		v=0-v
+	end
+	call putn v
+end
+fn toks p n
+	e=p+n
+	s=0
+	label more
+	call pdfobjskip p e as a
+	call pdfobjtok a e as k m
+	if k
+		if s
+			call print " "
+		end
+		s=1
+		call strlen kinds+k*8 as l
+		call print kinds+k*8 l
+		call print ":"
+		call print a m-a
+		p=m
+		jmp more
+	end
+	call print "\n"
+end
+fn val p n
+	call pdfobjskip p p+n as a
+	call pdfobjvalue a p+n as m
+	if m
+		call putn m-a
+	else
+		call print "none"
+	end
+	call print "\n"
+end
+fn get p n kp kn
+	call pdfobjget p p+n kp kn as v
+	if v
+		call pdfobjvalue v p+n as m
+		call print v m-v
+	else
+		call print "none"
+	end
+	call print "\n"
+end
+fn arr p n
+	e=p+n
+	call pdfobjfirst p e as a
+	ifz a
+		call print "none\n"
+		ret 0
+	end
+	label more
+	call pdfobjtok a e as k m
+	if k!=pdfobjarrend
+		call pdfobjvalue a e as m
+		ifz m
+			call print "?\n"
+			ret 0
+		end
+		call print a m-a
+		call print "|"
+		call pdfobjnext a e as a
+		jmp more
+	end
+	call print "\n"
+end
+fn int p n
+	call pdfobjint p p+n as v ok
+	call num v
+	call print " "
+	call putn ok
+	call print "\n"
+end
+fn num3 p n
+	call pdfobjnum p p+n as v ok
+	call num v
+	call print " "
+	call putn ok
+	call print "\n"
+end
+fn ref p n
+	call pdfobjref p p+n as ok x y
+	call putn ok
+	call print " "
+	call putn x
+	call print " "
+	call putn y
+	call print "\n"
+end
+data hexd "0123456789abcdef"
+fn str p n
+	call bycut b 0
+	call byaddb b 60
+	call pdfobjstring p p+n b as ok
+	load b as q
+	load b+8 as m
+	ifz ok
+		if m==1
+			call print "none\n"
+		else
+			call print "a buffer that changed\n"
+		end
+		ret 0
+	end
+	call print "<"
+	i=1
+	while i<m
+		loadb q+i as c
+		call print hexd+(c>>4) 1
+		call print hexd+(c&15) 1
+		i+=1
+	end
+	call print ">\n"
+end
+call print "# tokens\n"
+call toks "12 -3 +7 1.5 -.25 4. . + - 1.2.3 12a"
+call toks "/Name /A#20B / /a/b[/c]"
+call toks "(a (b) c) (\x5c() (x\x5c\x5c) <48 65> <<>> < >"
+call toks "true false null obj endobj R Tj {x}1"
+call toks "% a comment\x0a1 % two\x0d2%end"
+call toks "1\x00\x0c\x092(a)3/b<c>4"
+call toks "(abc"
+call toks ") 1"
+call toks "> 1"
+call toks "<4x>"
+call toks "(a\x5c"
+call toks " \x0a"
+call toks ""
+call print "# the end of a value\n"
+call val "12 0 R /x"
+call val "12 0 obj"
+call val "12 0"
+call val "12 0 R"
+call val "1 2 RG"
+call val "[1 [2 3] <</a (])>>] x"
+call val "<</A 1/B[1 2]>>stream"
+call val "[1 2"
+call val "]"
+call val ">>"
+call val ""
+call val "(x"
+call val "[ ( ]"
+call val "<</A 1"
+call val "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"
+call val "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"
+call val "null"
+call val "/N 1"
+call val "(s)(t)"
+call val "<41>"
+call val "1.5]"
+call val "endobj"
+call print "# the value of a key\n"
+call get "<</Type /Page /Kids [1 0 R 2 0 R] /Count 2 /A#42 (x) /Sub <</Type /X>> /R 7 0 R>>" "Type"
+call get "<</Type /Page /Kids [1 0 R 2 0 R] /Count 2 /A#42 (x) /Sub <</Type /X>> /R 7 0 R>>" "Kids"
+call get "<</Type /Page /Kids [1 0 R 2 0 R] /Count 2 /A#42 (x) /Sub <</Type /X>> /R 7 0 R>>" "Count"
+call get "<</Type /Page /Kids [1 0 R 2 0 R] /Count 2 /A#42 (x) /Sub <</Type /X>> /R 7 0 R>>" "AB"
+call get "<</Type /Page /Kids [1 0 R 2 0 R] /Count 2 /A#42 (x) /Sub <</Type /X>> /R 7 0 R>>" "Sub"
+call get "<</Type /Page /Kids [1 0 R 2 0 R] /Count 2 /A#42 (x) /Sub <</Type /X>> /R 7 0 R>>" "R"
+call get "<</Type /Page /Kids [1 0 R 2 0 R] /Count 2 /A#42 (x) /Sub <</Type /X>> /R 7 0 R>>" "Missing"
+call get "<</Type /Page /Kids [1 0 R 2 0 R] /Count 2 /A#42 (x) /Sub <</Type /X>> /R 7 0 R>>" "X"
+call get "[1]" "A"
+call get "<</A [1 /B 2>>" "B"
+call get "<</A>>" "A"
+call get "<</A 1 /A 2>>" "A"
+call get "<</Typ 1>>" "Type"
+call get "<</Types 1>>" "Type"
+call get "<</A 1 2 /B 3>>" "B"
+call get "<<%c\x0a/A%c\x0a1>>" "A"
+call get "<</A 1" "A"
+call get "<</A 1" "B"
+call get "<<>>" ""
+call get "<</ 5>>" ""
+call print "# the elements of an array\n"
+call arr "[1 /a (s) [2 3] <</k 1>> 4 0 R]"
+call arr "[]"
+call arr "[ ]"
+call arr "[1 ("
+call arr "1"
+call arr "[1 2"
+call print "# integers\n"
+call int "42"
+call int "-7"
+call int "+0"
+call int "1.0"
+call int "/x"
+call int "1234567890123456789"
+call int "123456789012345678"
+call int "-123456789012345678 1"
+call int ""
+call print "# numbers, in thousandths\n"
+call num3 "1.5"
+call num3 "-.25"
+call num3 "4."
+call num3 "3"
+call num3 "0.0005"
+call num3 "12.3456"
+call num3 "-0.9999"
+call num3 "abc"
+call num3 "1234567890123456"
+call num3 "123456789012345.678"
+call num3 "+2.50 x"
+call print "# references\n"
+call ref "12 0 R"
+call ref "12 0 obj"
+call ref "12 R"
+call ref "1 2 RG"
+call ref "12 3 R]"
+call ref "12\x0a%c\x0a0\x09R"
+call ref "/a 0 R"
+call print "# the bytes of a string\n"
+call str "(abc)"
+call str "(a\x5cn\x5cr\x5ct\x5cb\x5cf\x5c(\x5c)\x5c\x5c)"
+call str "(\x5c101\x5c7\x5c0010\x5c400)"
+call str "(a\x5c\x0ab)"
+call str "(a\x5c\x0d\x0ab)"
+call str "(a\x5c\x0db)"
+call str "(a\x0d\x0ab\x0dc\x0ad)"
+call str "(a\x5cqb)"
+call str "(nested (p) q)"
+call str "()"
+call str "<48656C6c6f>"
+call str "<4 8 6>"
+call str "<>"
+call str "/x"
+call str "(a\x5c"
+call str "(\x5c8\x5c9)"
+call str "(\x5c12)"
+call str "(\x5c1234)"

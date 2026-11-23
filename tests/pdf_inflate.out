@@ -1,0 +1,92 @@
+# a stored block
+19 <hello, stored
+
+# the fixed codes, with a copy
+11 <hello hello hello hello
+
+# codes of the block itself
+215 <lambda epsilon nu phi beta gamma sigma delta mu tau beta rho eta beta gamma xi xi gamma theta gamma sigma xi beta tau delta theta phi phi tau beta tau tau nu beta theta beta sigma epsilon kappa xi epsilon sigma delta tau kappa sigma chi zeta delta tau tau phi eta mu delta sigma psi gamma tau beta upsilon eta pi chi sigma xi lambda omicron tau omicron mu kappa theta zeta psi theta gamma tau kappa rho pi lambda omega omicron kappa upsilon gamma delta rho xi zeta lambda epsilon pi xi beta chi gamma sigma tau lambda lambda psi mu upsilon pi tau omicron gamma gamma iota pi psi chi gamma beta omega psi kappa phi
+
+# no bytes
+2 <
+# bytes after the last block are not read
+215 <lambda epsilon nu phi beta gamma sigma delta mu tau beta rho eta beta gamma xi xi gamma theta gamma sigma xi beta tau delta theta phi phi tau beta tau tau nu beta theta beta sigma epsilon kappa xi epsilon sigma delta tau kappa sigma chi zeta delta tau tau phi eta mu delta sigma psi gamma tau beta upsilon eta pi chi sigma xi lambda omicron tau omicron mu kappa theta zeta psi theta gamma tau kappa rho pi lambda omega omicron kappa upsilon gamma delta rho xi zeta lambda epsilon pi xi beta chi gamma sigma tau lambda lambda psi mu upsilon pi tau omicron gamma gamma iota pi psi chi gamma beta omega psi kappa phi
+
+# three blocks, one of them stored and empty
+32 <one block, and one more
+
+# a copy that reads what it writes
+4 <aaaa
+# a run of one byte
+11 1000 4360425977657714541
+# a distance of 32768
+33178 33168 1687960397753910351
+# many codes
+7159 24608 17277794574814689102
+# 3700000 bytes
+10814 3700000 10873125945357874469
+# as many bytes as may be added
+11 <hello hello hello hello
+
+# a byte more than may be added
+-27 <
+# a stored block of more than may be added
+-27 <
+# no bytes where none may be added
+2 <
+# every start of the data, stored, is not the data
+19 of 19
+# every start of the data, fixed, is not the data
+11 of 11
+# every start of the data, its own codes, is not the data
+215 of 215
+# no data
+-22 <
+# a block of the kind 3
+-22 <
+# a stored block whose two lengths differ
+-22 <
+# a stored block longer than the data
+-22 <
+# a copy from before the first byte
+-22 <
+# a copy from two bytes back after one byte
+-22 <
+# the literal 286
+-22 <
+# the distance 30
+-22 <
+# four code length codes of one bit
+-22 <
+# the length before, with none before
+-22 <
+# more lengths than the two codes have
+-22 <
+# no code for the end of a block
+-22 <
+# the work of the tables of a block, 4100: one unit too few, enough, and what is left after the fixed codes
+-27 < -1
+215 <lambda epsilon nu phi beta gamma sigma delta mu tau beta rho eta beta gamma xi xi gamma theta gamma sigma xi beta tau delta theta phi phi tau beta tau tau nu beta theta beta sigma epsilon kappa xi epsilon sigma delta tau kappa sigma chi zeta delta tau tau phi eta mu delta sigma psi gamma tau beta upsilon eta pi chi sigma xi lambda omicron tau omicron mu kappa theta zeta psi theta gamma tau kappa rho pi lambda omega omicron kappa upsilon gamma delta rho xi zeta lambda epsilon pi xi beta chi gamma sigma tau lambda lambda psi mu upsilon pi tau omicron gamma gamma iota pi psi chi gamma beta omega psi kappa phi 0
+3 <x 4099
+# 15997 bytes unpacked before data that is none: 999 of work for them, after 4100 for the tables
+-22 < 4901
+# a stream of zlib
+13 <zlib wrapped
+
+# bytes after its sum are not read
+13 <zlib wrapped
+
+# a sum that differs
+-22 <
+# a sum of three bytes
+-22 <
+# a method that is not 8
+-22 <
+# a dictionary
+-22 <
+# two bytes that are no multiple of 31
+-22 <
+# five bytes
+-22 <
+# more than may be added
+-27 <

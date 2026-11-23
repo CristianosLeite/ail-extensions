@@ -1,0 +1,128 @@
+# a file written by hand: the operators that show and place text, spaces and line feeds from the places, the encodings, ToUnicode, forms, an inline image, contents in two streams, pages below a node, pages that cannot be read among them, a kid that is no page and has a number all the same, names of resources written with a number sign, and a space that is taken back before any text
+pages 16
+page 1: 64 [Hello world
+second line
+third
+fourth
+fifth
+sixth
+seventh gapback]
+page 2: 28 [abcd ef
+ghi j klm
+scaled far]
+page 3: 42 [fi€aΩx😀cZé1é
+é
+fi’‘
+“
+.B�]
+page 4: 37 [Hfflabc😀é�
+ΩBaaabac�Xfia
+hit]
+page 5: 21 [page
+form
+inner
+after]
+page 6: 12 [before
+after]
+page 7: 6 [joined]
+page 8: 6 [nested]
+page 9: -95 []
+page 10: -5 []
+page 11: -95 []
+page 12: 10 [still here]
+page 13: 39 [a name written with a number sign
+inner]
+page 14: 1 [A]
+page 15: 0 []
+page 16: -5 []
+page 0: -34 []
+page 17: -34 []
+page 1: 64 [Hello world
+second line
+third
+fourth
+fifth
+sixth
+seventh gapback]
+# files of Ghostscript and of cairo: a table and ToUnicode, a cross reference stream with an object stream and no ToUnicode, object streams with fonts of two bytes
+gs.pdf has /ToUnicode
+gs.pdf has xref
+pages 2
+page 1: 350 [A document of groff
+The first paragraph has plain words, an office with a fine affliction, and “quotes” — a dash. Café
+naïve façade.
+The second paragraph is long enough to be set in more than one line of the page, so that the
+reader has to join lines that follow one another, and it goes on for a while with some more words
+of no importance.]
+page 2: 25 [Page two of the document.]
+gsobj.pdf has /ObjStm
+gsobj.pdf has /XRef
+pages 2
+page 1: 350 [A document of groff
+The first paragraph has plain words, an office with a fine affliction, and “quotes” — a dash. Café
+naïve façade.
+The second paragraph is long enough to be set in more than one line of the page, so that the
+reader has to join lines that follow one another, and it goes on for a while with some more words
+of no importance.]
+page 2: 25 [Page two of the document.]
+cairo.pdf has /ObjStm
+cairo.pdf has /XRef
+cairo.pdf has /ToUnicode
+pages 2
+page 1: 156 [A document of cairo
+Plain words, an office and a fine affliction.
+Café naïve façade — “quotes” and a dash.
+Ελληνικά and кириллица.]
+page 2: 25 [Page two of the document.]
+# the work a document may cost: this file takes 554 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so
+open -7
+open 16
+page 1: -7 []
+page 8: -7 []
+open 16
+page 1: 64 [Hello world
+second line
+third
+fourth
+fifth
+sixth
+seventh gapback]
+page 8: -7 []
+page 1: -7 []
+# the memory it may hold: 2000 bytes are too few for its objects and its pages
+open -7
+# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; thirty kids a node of the page tree, sixty deep; a page of 1000 streams of 10000 blocks that unpack to nothing; before them a font whose ToUnicode CMap gives 250 characters to each of 65536 codes
+open 1
+page 1: -7 []
+open 1
+page 1: -7 []
+open 1
+page 1: -7 []
+open -7
+open 1
+page 1: -7 []
+# the 400 streams again with work for all of them: they are held together, and 64 MiB of memory are not enough
+open 1
+page 1: -7 []
+# a page tree 65 deep is no document, since its pages could not be numbered; 64 deep it is read
+open 1
+open -22
+# the text of a page is at most the memory left: 256 lines of 64 bytes, with 12000 bytes, after which the buffer has not grown beyond twice that and 4096, and with a million
+open 1
+page 1: -7, room within 28096
+open 1
+page 1: 16639
+# contents that are an array: one that a string without its end cuts short and one that the bytes end in are no contents, though a stream before could be read; between them a page of two streams; then contents that are null, which is a page of no text, and null for the resources of a page and for the filter of its stream, which are as not there
+pages 5
+page 1: -5 []
+page 2: 7 [one
+two]
+page 3: -5 []
+page 4: 0 []
+page 5: 5 [three]
+# each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds
+hand.pdf: 1258 files read
+gs.pdf: 1725 files read
+gsobj.pdf: 1489 files read
+cairo.pdf: 2115 files read
+in time
