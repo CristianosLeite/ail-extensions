@@ -1,0 +1,157 @@
+# pdf/src/pdfdoc.aiw: files written for the test by Python 3, which
+# also wrote what each line is to print: a table of one section and of
+# two, with an object replaced and one given up, a section that names
+# itself, bytes before the header, entries that point to nothing, a
+# circle of references, an encrypted file, seventeen files that are no
+# PDF, and the work and the memory used to the last unit.
+use "lib/std/io.aiw"
+use "lib/std/bytes.aiw"
+use "pdf/src/pdfdoc.aiw"
+buf d pdfdocsize
+fn num v
+	ifslt v 0
+		call print "-"
+		v=0-v
+	end
+	call putn v
+end
+fn open p n w m
+	call pdfdocopen p n d w m as r
+	call print "open "
+	call num r
+	call print "\n"
+end
+# the value at a, as it is written
+fn text a e
+	ifz a
+		call print "none\n"
+		ret 0
+	end
+	call pdfobjvalue a e as m
+	ifz m
+		call print "?\n"
+		ret 0
+	end
+	call print a m-a
+	call print "\n"
+end
+fn show n
+	call putn n
+	call print ": "
+	call pdfdocobj d n as a e
+	call text a e
+end
+fn key n kp kn
+	call putn n
+	call print "."
+	call print kp kn
+	call print ": "
+	call pdfdocobj d n as a e
+	ifz a
+		call print "none\n"
+		ret 0
+	end
+	call pdfdocget d a e kp kn as v ve
+	call text v ve
+end
+fn deref n
+	call putn n
+	call print " -> "
+	call pdfdocobj d n as a e
+	ifz a
+		call print "none\n"
+		ret 0
+	end
+	call pdfdocderef d a e as v ve
+	call text v ve
+end
+fn err
+	call pdfdocerr d as r
+	call print "err "
+	call num r
+	call print "\n"
+end
+call print "# a table of one section\n"
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a" 100000 1000000
+call show 0
+call show 1
+call show 2
+call show 3
+call show 4
+call show 5
+call show 8388609
+call key 1 "Pages"
+call key 1 "Type"
+call key 1 "None"
+call key 3 "Type"
+call deref 4
+call deref 3
+call err
+call pdfdocclose d
+call print "# a section after it: an object written again, one given up, two runs of numbers\n"
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0 /New true>>\x0aendobj\x0axref\x0a0 1\x0a0000000000 65535 f \x0a2 2\x0a0000000314 00000 n \x0a0000000000 65535 f \x0atrailer\x0a<</Size 5 /Root 1 0 R /Prev 153>>\x0astartxref\x0a374\x0a%%EOF\x0a" 100000 1000000
+call show 1
+call show 2
+call show 3
+call deref 4
+call key 1 "Pages"
+call pdfdocclose d
+call print "# a section that names itself as the one before\n"
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R /Prev 153>>\x0astartxref\x0a153\x0a%%EOF\x0a" 100000 1000000
+call show 1
+call pdfdocclose d
+call print "# bytes before the header\n"
+call open "junk\x0a%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000014 00000 n \x0a0000000061 00000 n \x0a0000000111 00000 n \x0a0000000137 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R>>\x0astartxref\x0a158\x0a%%EOF\x0a" 100000 1000000
+call show 3
+call pdfdocclose d
+call print "# an entry that points to another object, one beyond the file, references in a circle, 32 and 33 in a row\n"
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0a5 0 obj\x0a6 0 R\x0aendobj\x0a6 0 obj\x0a5 0 R\x0aendobj\x0a10 0 obj\x0a11 0 R\x0aendobj\x0a11 0 obj\x0a12 0 R\x0aendobj\x0a12 0 obj\x0a13 0 R\x0aendobj\x0a13 0 obj\x0a14 0 R\x0aendobj\x0a14 0 obj\x0a15 0 R\x0aendobj\x0a15 0 obj\x0a16 0 R\x0aendobj\x0a16 0 obj\x0a17 0 R\x0aendobj\x0a17 0 obj\x0a18 0 R\x0aendobj\x0a18 0 obj\x0a19 0 R\x0aendobj\x0a19 0 obj\x0a20 0 R\x0aendobj\x0a20 0 obj\x0a21 0 R\x0aendobj\x0a21 0 obj\x0a22 0 R\x0aendobj\x0a22 0 obj\x0a23 0 R\x0aendobj\x0a23 0 obj\x0a24 0 R\x0aendobj\x0a24 0 obj\x0a25 0 R\x0aendobj\x0a25 0 obj\x0a26 0 R\x0aendobj\x0a26 0 obj\x0a27 0 R\x0aendobj\x0a27 0 obj\x0a28 0 R\x0aendobj\x0a28 0 obj\x0a29 0 R\x0aendobj\x0a29 0 obj\x0a30 0 R\x0aendobj\x0a30 0 obj\x0a31 0 R\x0aendobj\x0a31 0 obj\x0a32 0 R\x0aendobj\x0a32 0 obj\x0a33 0 R\x0aendobj\x0a33 0 obj\x0a34 0 R\x0aendobj\x0a34 0 obj\x0a35 0 R\x0aendobj\x0a35 0 obj\x0a36 0 R\x0aendobj\x0a36 0 obj\x0a37 0 R\x0aendobj\x0a37 0 obj\x0a38 0 R\x0aendobj\x0a38 0 obj\x0a39 0 R\x0aendobj\x0a39 0 obj\x0a40 0 R\x0aendobj\x0a40 0 obj\x0a41 0 R\x0aendobj\x0a41 0 obj\x0a42 0 R\x0aendobj\x0a42 0 obj\x0a(end)\x0aendobj\x0a43 0 obj\x0a10 0 R\x0aendobj\x0axref\x0a0 44\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000056 00000 n \x0a0000000132 00000 n \x0a0000000153 00000 n \x0a0000000174 00000 n \x0a0010000000 00000 n \x0a0000000931 00000 n \x0a0000000000 65535 f \x0a0000000195 00000 n \x0a0000000218 00000 n \x0a0000000241 00000 n \x0a0000000264 00000 n \x0a0000000287 00000 n \x0a0000000310 00000 n \x0a0000000333 00000 n \x0a0000000356 00000 n \x0a0000000379 00000 n \x0a0000000402 00000 n \x0a0000000425 00000 n \x0a0000000448 00000 n \x0a0000000471 00000 n \x0a0000000494 00000 n \x0a0000000517 00000 n \x0a0000000540 00000 n \x0a0000000563 00000 n \x0a0000000586 00000 n \x0a0000000609 00000 n \x0a0000000632 00000 n \x0a0000000655 00000 n \x0a0000000678 00000 n \x0a0000000701 00000 n \x0a0000000724 00000 n \x0a0000000747 00000 n \x0a0000000770 00000 n \x0a0000000793 00000 n \x0a0000000816 00000 n \x0a0000000839 00000 n \x0a0000000862 00000 n \x0a0000000885 00000 n \x0a0000000908 00000 n \x0a0000000931 00000 n \x0a0000000953 00000 n \x0atrailer\x0a<</Size 44 /Root 1 0 R>>\x0astartxref\x0a976\x0a%%EOF\x0a" 100000 1000000
+call show 3
+call show 7
+call show 8
+call show 9
+call deref 5
+call deref 10
+call deref 43
+call err
+call pdfdocclose d
+call print "# an encrypted file\n"
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R /Encrypt 9 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a" 100000 1000000
+call print "# what is no PDF file\n"
+call open "" 100000 1000000
+call open "hello" 100000 1000000
+call open "%PDF-1.4\x0a" 100000 1000000
+call open "%PDF-1.4\x0astartxref\x0a999\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0a1 0 obj\x0a1\x0aendobj\x0astartxref\x0a9\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0astartxref\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0axref\x0a0 1\x0a0000000000 65535 x \x0atrailer\x0a<</Size 1 /Root 1 0 R>>\x0astartxref\x0a9\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0axref\x0a0 1\x0a0000000000 65535 f \x0astartxref\x0a9\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0axref\x0a0 1\x0a0000000000 65535 f \x0atrailer\x0a5\x0astartxref\x0a9\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0axref\x0a0 8000000\x0atrailer\x0a<</Size 1 /Root 1 0 R>>\x0astartxref\x0a9\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0axref\x0a0 -1\x0atrailer\x0a<</Size 1 /Root 1 0 R>>\x0astartxref\x0a9\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5>>\x0astartxref\x0a153\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root <<>>>>\x0astartxref\x0a153\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 3 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 9 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a" 100000 1000000
+call open "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            %PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000001109 00000 n \x0a0000001156 00000 n \x0a0000001206 00000 n \x0a0000001232 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R>>\x0astartxref\x0a1253\x0a%%EOF\x0a" 100000 1000000
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    " 100000 1000000
+call print "# the work: 16 for the section, 6 for its entries, 4 for the catalog\n"
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a" 25 1000000
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a" 26 1000000
+call err
+call show 1
+call err
+call show 2
+call key 1 "Type"
+call pdfdocclose d
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a" 30 1000000
+call show 1
+call show 2
+call err
+call pdfdocclose d
+call print "# the memory: 16 bytes an object\n"
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a" 100000 79
+call open "%PDF-1.4\x0a1 0 obj\x0a<</Type /Catalog /Pages 2 0 R>>\x0aendobj\x0a2 0 obj\x0a<</Type /Pages /Kids [] /Count 0>>\x0aendobj\x0a3 0 obj\x0a(a string)\x0aendobj\x0a4 0 obj\x0a3 0 R\x0aendobj\x0axref\x0a0 5\x0a0000000000 65535 f \x0a0000000009 00000 n \x0a0000000056 00000 n \x0a0000000106 00000 n \x0a0000000132 00000 n \x0atrailer\x0a<</Size 5 /Root 1 0 R>>\x0astartxref\x0a153\x0a%%EOF\x0a" 100000 80
+call show 1
+call err
+call pdfdocclose d
