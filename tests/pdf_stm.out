@@ -61,6 +61,17 @@ err -7
 5: -7 <
 open 0
 4: 0 1000000
+# bytes that no filter packed, and bytes of base 85 that are all z, more than the memory left
+open 0
+4: -7 <
+err -7
+open 0
+5: -7 <
+open 0
+6: -7 <
+open 0
+5: 0 400000
+6: 0 200000
 # a cross reference stream with a predictor, and objects in an object stream
 open 0
 0: none

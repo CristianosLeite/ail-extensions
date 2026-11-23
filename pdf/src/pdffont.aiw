@@ -165,20 +165,27 @@ data "zeta\0" 182 3
 data 0
 data pdffontlig "ff fi fl ffiffl"
 
-# the number that the pdffontn hexadecimal digits at pdffontp write, or all ones if
-# one of them is no digit or they are more than eight
+# the number that the hexadecimal digits among the pdffontn bytes at pdffontp
+# write, white space between them left out, or all ones if a byte is
+# neither or the digits are more than eight
 fn pdffonthexnum pdffontp pdffontn
-	if pdffontn>8
-		ret 0-1
-	end
 	pdffontv=0
+	pdffontk=0
 	while pdffontn
 		loadb pdffontp as pdffontc
-		call pdfobjdigit pdffontc as pdffontc
-		if pdffontc>15
-			ret 0-1
+		call pdfobjdigit pdffontc as pdffontx
+		if pdffontx>15
+			call pdfobjwhite pdffontc as pdffontc
+			ifz pdffontc
+				ret 0-1
+			end
+		else
+			pdffontk+=1
+			if pdffontk>8
+				ret 0-1
+			end
+			pdffontv=pdffontv*16+pdffontx
 		end
-		pdffontv=pdffontv*16+pdffontc
 		pdffontp+=1
 		pdffontn-=1
 	end
@@ -355,6 +362,13 @@ end
 # codes of a run have it; pdffontt is a buffer that it empties and uses. 0 if
 # it writes none.
 fn pdffontdst pdffontd pdffontr pdffonta pdffonte pdffontt pdffontadd
+	# reading it is work each time, and one that is longer than any
+	# characters of a code is not read
+	call pdfobjtok pdffonta pdffonte as pdffontk pdffontn
+	call pdfdocspend pdffontd (pdffontn-pdffonta>>3)+1 as pdffontw
+	if (pdffontw==0)|(pdffontn-pdffonta>1026)
+		ret 0
+	end
 	call bycut pdffontt 0
 	call pdfobjstring pdffonta pdffonte pdffontt as pdffontw
 	ifz pdffontw
@@ -473,6 +487,8 @@ fn pdffontcmap pdffontd pdffontr pdffonta pdffonte
 						while pdffontlo<=pdffonthi
 							call pdffontdst pdffontd pdffontr pdffontp pdffonte pdffontt pdffontx as pdffontv
 							call pdffontput pdffontr pdffontlo pdffontv
+							call pdfdocerr pdffontd as pdffontw
+							jnz pdffontw done
 							pdffontx+=1
 							pdffontlo+=1
 						end

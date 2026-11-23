@@ -28,8 +28,8 @@
 # endstream follows them there; else they end before the first
 # endstream. Data of FlateDecode whose Adler-32 is wrong or missing is
 # taken if its last block ends. A row of a predictor that the bytes end
-# in is left out. What a filter unpacks to is at most the memory the
-# document has left; the bytes it reads and the bytes it gives count as
+# in is left out. What a filter unpacks to, and what is added to out,
+# is at most the memory the document has left; the bytes it reads and the bytes it gives count as
 # work, and so do the tables of each block of FlateDecode.
 #
 # Every name of this file starts with "pdfstm"; a program has no var
@@ -102,6 +102,8 @@ fn pdfstmraw pdfstmd pdfstma pdfstme
 	end
 	call pdfstmfind pdfstmn pdfstme "endstream" as pdfstmb
 	ifz pdfstmb
+		# looked for to the end of the file, which is work too
+		call pdfdocspend pdfstmd (pdfstme-pdfstmn>>4)+1
 		ret 0 0
 	end
 	call pdfdocspend pdfstmd (pdfstmb-pdfstmn>>4)+1 as pdfstmw
@@ -161,9 +163,11 @@ fn pdfstmhex pdfstmp pdfstmn pdfstmb
 	ret pdfdocmem
 end
 
-# add the bytes that the pdfstmn bytes at pdfstmp write in base 85, up to a "~>":
-# 0, or an error
-fn pdfstma85 pdfstmp pdfstmn pdfstmb
+# add the bytes that the pdfstmn bytes at pdfstmp write in base 85, up to a "~>",
+# pdfstmmax at most: 0, or an error
+fn pdfstma85 pdfstmp pdfstmn pdfstmb pdfstmmax
+	load pdfstmb+8 as pdfstmx
+	pdfstmmax+=pdfstmx
 	pdfstmi=0
 	# the "<~" that some writers put before
 	if pdfstmn>=2
@@ -183,6 +187,10 @@ fn pdfstma85 pdfstmp pdfstmn pdfstmb
 		end
 		call pdfobjwhite pdfstmc as pdfstmw
 		jnz pdfstmw more
+		load pdfstmb+8 as pdfstmx
+		if pdfstmx>pdfstmmax
+			ret pdfdocspent
+		end
 		if (pdfstmc==122)&(pdfstmk==0)
 			call byadd pdfstmb "\0\0\0\0" as pdfstmw
 			jz pdfstmw nomem
@@ -483,12 +491,18 @@ fn pdfstmdata pdfstmd pdfstma pdfstme pdfstmout
 	call pdfobjis pdfstmv pdfstmm "ASCIIHexDecode" as pdfstmx
 	call pdfobjis pdfstmv pdfstmm "AHx" as pdfstmy
 	if pdfstmx|pdfstmy
-		call pdfstmhex pdfstmp pdfstmn pdfstmt as pdfstmr
+		# two digits a byte: not more than the memory left
+		load pdfstmd+40 as pdfstmmax
+		pdfstmr=pdfdocspent
+		if pdfstmn>>1<=pdfstmmax
+			call pdfstmhex pdfstmp pdfstmn pdfstmt as pdfstmr
+		end
 	end
 	call pdfobjis pdfstmv pdfstmm "ASCII85Decode" as pdfstmx
 	call pdfobjis pdfstmv pdfstmm "A85" as pdfstmy
 	if pdfstmx|pdfstmy
-		call pdfstma85 pdfstmp pdfstmn pdfstmt as pdfstmr
+		load pdfstmd+40 as pdfstmmax
+		call pdfstma85 pdfstmp pdfstmn pdfstmt pdfstmmax as pdfstmr
 	end
 	jnz pdfstmr done
 	load pdfstmt as pdfstmp
@@ -499,6 +513,13 @@ fn pdfstmdata pdfstmd pdfstma pdfstme pdfstmout
 	label end
 	pdfstmr=0
 	call pdfdocspend pdfstmd (pdfstmn>>4)+1 as pdfstmw
+	# what is added is at most the memory left, also bytes that no
+	# filter packed
+	load pdfstmd+40 as pdfstmmax
+	if pdfstmn>pdfstmmax
+		pdfstmr=pdfdocspent
+		pdfstmw=0
+	end
 	if pdfstmw
 		call byadd pdfstmout pdfstmp pdfstmn as pdfstmw
 		ifz pdfstmw
@@ -511,6 +532,9 @@ fn pdfstmdata pdfstmd pdfstma pdfstme pdfstmout
 	# no memory is an error of the document, whoever found it
 	if pdfstmr==pdfdocmem
 		call pdfdocfail pdfstmd pdfdocmem
+	end
+	if pdfstmr==pdfdocspent
+		call pdfdocfail pdfstmd pdfdocspent
 	end
 	call pdfdocerr pdfstmd as pdfstmx
 	if pdfstmx

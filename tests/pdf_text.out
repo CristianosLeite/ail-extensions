@@ -15,8 +15,8 @@ page 3: 40 [fi€aΩx😀cZé1
 fi’‘
 “
 .B�]
-page 4: 33 [Hfflabc😀é�
-ΩBaaabac�
+page 4: 34 [Hfflabc😀é�
+ΩBaaabac�X
 hit]
 page 5: 21 [page
 form
@@ -91,7 +91,9 @@ page 8: -7 []
 page 1: -7 []
 # the memory it may hold: 2000 bytes are too few for its objects and its pages
 open -7
-# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; thirty kids a node of the page tree, sixty deep; a page of 1000 streams of 10000 blocks that unpack to nothing
+# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; thirty kids a node of the page tree, sixty deep; a page of 1000 streams of 10000 blocks that unpack to nothing; before them a font whose ToUnicode CMap gives 250 characters to each of 65536 codes
+open 1
+page 1: -7 []
 open 1
 page 1: -7 []
 open 1
@@ -111,7 +113,7 @@ page 1: -7
 open 1
 page 1: 16639
 # each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds
-hand.pdf: 1251 files read
+hand.pdf: 1255 files read
 gs.pdf: 1725 files read
 gsobj.pdf: 1489 files read
 cairo.pdf: 2115 files read

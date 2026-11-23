@@ -234,7 +234,10 @@ call page 1
 call pdfclose d
 call print "# the memory it may hold: 2000 bytes are too few for its objects and its pages\n"
 call cost "tests/data/hand.pdf" 100000 2000
-call print "# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; thirty kids a node of the page tree, sixty deep; a page of 1000 streams of 10000 blocks that unpack to nothing\n"
+call print "# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; thirty kids a node of the page tree, sixty deep; a page of 1000 streams of 10000 blocks that unpack to nothing; before them a font whose ToUnicode CMap gives 250 characters to each of 65536 codes\n"
+call cost "tests/data/cmap.pdf" 2000000 67108864
+call page 1
+call pdfclose d
 call cost "tests/data/forms.pdf" 2000000 67108864
 call page 1
 call pdfclose d
