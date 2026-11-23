@@ -107,9 +107,9 @@ page 1: -7 []
 # a page tree 65 deep is no document, since its pages could not be numbered; 64 deep it is read
 open 1
 open -22
-# the text of a page is at most the memory left: 256 lines of 64 bytes, with 12000 bytes and with a million
+# the text of a page is at most the memory left: 256 lines of 64 bytes, with 12000 bytes, after which the buffer has not grown beyond twice that and 4096, and with a million
 open 1
-page 1: -7
+page 1: -7, room within 28096
 open 1
 page 1: 16639
 # each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds

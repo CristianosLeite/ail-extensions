@@ -78,6 +78,24 @@ fn count i
 	call num r
 	call print "\n"
 end
+# the result of the page i, read into a buffer that has no room yet,
+# and whether its room is max bytes at most afterwards
+fn room i max
+	call byfree out
+	call pdfpage d i out as r
+	call print "page "
+	call putn i
+	call print ": "
+	call num r
+	load out+16 as c
+	if c<=max
+		call print ", room within "
+	else
+		call print ", room beyond "
+	end
+	call putn max
+	call print "\n"
+end
 # say that the file at the path p n has the bytes q m
 fn has p n q m
 	call bycut f 0
@@ -256,9 +274,9 @@ call print "# a page tree 65 deep is no document, since its pages could not be n
 call cost "tests/data/deep64.pdf" 1000000 1000000
 call pdfclose d
 call cost "tests/data/deep65.pdf" 1000000 1000000
-call print "# the text of a page is at most the memory left: 256 lines of 64 bytes, with 12000 bytes and with a million\n"
+call print "# the text of a page is at most the memory left: 256 lines of 64 bytes, with 12000 bytes, after which the buffer has not grown beyond twice that and 4096, and with a million\n"
 call cost "tests/data/text.pdf" 10000000 12000
-call count 1
+call room 1 28096
 call pdfclose d
 call cost "tests/data/text.pdf" 10000000 1000000
 call count 1

@@ -14,7 +14,11 @@
 # and code, and the bytes that may be allocated at one time. The buffer
 # out is the caller's and is not counted, but the text of one page is
 # at most the memory the document has left when it is read: a page
-# with more makes the document spent. What a caller keeps in out from
+# with more makes the document spent, and this is looked at before
+# each code is added, so the buffer does not grow for text that is
+# then taken back. A buffer of lib/std/bytes.aiw grows by doubling, so
+# the room that a page adds to out is at most twice that memory and
+# 4096 bytes. What a caller keeps in out from
 # page to page is its own to limit; the work bounds it, 16 bytes of
 # text a unit.
 #
@@ -351,6 +355,15 @@ fn pdftext pdfd pdfst pdfa pdfe
 		end
 		pdfsum+=pdfw
 		if pdfx
+			# before the buffer grows: the characters of a code are 127
+			# bytes at most, and the text of the page with them is to be
+			# no more than the memory left
+			load pdfo+8 as pdfk
+			load pdfst+pdfps as pdfq
+			load pdfd+40 as pdfm
+			if pdfk-pdfq+127>pdfm
+				tail pdfdocfail pdfd pdfdocspent
+			end
 			call pdffonttext pdfr pdfcode pdfo as pdfw
 			ifz pdfw
 				tail pdfdocfail pdfd pdfdocmem
@@ -382,15 +395,9 @@ fn pdftext pdfd pdfst pdfa pdfe
 	store pdfst+pdfhv 1
 	call pdfm3 pdfc pdfz as pdfsum
 	call pdfadv pdfst pdfsum
-	# the text is work as it is added, and all of a page is at most the
-	# memory the document has left
+	# the text is work as it is added
 	load pdfo+8 as pdfk
 	call pdfdocspend pdfd pdfk-pdfo0>>4 as pdfw
-	load pdfst+pdfps as pdfx
-	load pdfd+40 as pdfm
-	if pdfk-pdfx>pdfm
-		call pdfdocfail pdfd pdfdocspent
-	end
 end
 
 # make the font of the page the one that the Font resources name with
