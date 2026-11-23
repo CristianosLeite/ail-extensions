@@ -292,6 +292,16 @@ fn pdffontutf8 pdffontb pdffontcp
 	tail byaddb pdffontb 0x80|(pdffontcp&63)
 end
 
+# add the character pdffontcp, or the letters of one of the five ligatures
+# U+FB00 to U+FB04, which are written out: 1, or 0
+fn pdffontletters pdffontb pdffontcp
+	if (pdffontcp>=0xfb00)&(pdffontcp<=0xfb04)
+		pdffontcp-=0xfb00
+		tail byadd pdffontb pdffontlig+pdffontcp*3 2+(pdffontcp>2)
+	end
+	tail pdffontutf8 pdffontb pdffontcp
+end
+
 fn pdffontnext pdffontr pdffontp pdffontn pdffonti
 	load pdffontr+8 as pdffontw
 	loadb pdffontp+pdffonti as pdffontc
@@ -322,12 +332,7 @@ fn pdffonttext pdffontr pdffontcode pdffontb
 		load pdffontr+32 as pdffontm
 		tail byadd pdffontb pdffontm+(pdffontv&0xffffff) pdffontv>>24&127
 	end
-	if (pdffontv>=0xfb00)&(pdffontv<=0xfb04)
-		pdffontv-=0xfb00
-		pdffontl=2+(pdffontv>2)
-		tail byadd pdffontb pdffontlig+pdffontv*3 pdffontl
-	end
-	tail pdffontutf8 pdffontb pdffontv
+	tail pdffontletters pdffontb pdffontv
 end
 
 # 1 if the code is one byte and stands for a space, the character
@@ -406,7 +411,7 @@ fn pdffontdst pdffontd pdffontr pdffonta pdffonte pdffontt pdffontadd
 		end
 		pdffontcp=pdffontc
 		pdffontk+=1
-		call pdffontutf8 pdffontr+32 pdffontc as pdffontw
+		call pdffontletters pdffontr+32 pdffontc as pdffontw
 		ifz pdffontw
 			store pdffontr+40 pdffontoff
 			tail pdfdocfail pdffontd pdfdocmem
@@ -600,6 +605,7 @@ end
 
 # the codes of a font of one byte: its encoding and its widths
 fn pdffontnarrow pdffontd pdffontr pdffonta pdffonte
+	local pdffontnm 128
 	pdffontbase=pdffontstd
 	pdffontown=1
 	call pdfdocget pdffontd pdffonta pdffonte "Subtype" as pdffontv pdffontve
@@ -650,9 +656,13 @@ fn pdffontnarrow pdffontd pdffontr pdffonta pdffonte
 				call pdfobjint pdffontq pdffontdfe as pdffonti pdffontw
 			end
 			if pdffontk==pdfobjname
-				call pdffontglyph pdffontq+1 pdffontm-pdffontq-1 as pdffontc
-				if pdffontc
-					call pdffontput pdffontr pdffonti pdffontc
+				# the name as its bytes: /e#61cute is eacute
+				call pdfobjnamed pdffontq pdffontm pdffontnm 128 as pdffontc
+				if pdffontc<=128
+					call pdffontglyph pdffontnm pdffontc as pdffontc
+					if pdffontc
+						call pdffontput pdffontr pdffonti pdffontc
+					end
 				end
 				pdffonti+=1
 			end

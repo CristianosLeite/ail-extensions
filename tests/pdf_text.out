@@ -10,13 +10,13 @@ seventh gapback]
 page 2: 28 [abcd ef
 ghi j klm
 scaled far]
-page 3: 40 [fi€aΩx😀cZé1
+page 3: 42 [fi€aΩx😀cZé1é
 é
 fi’‘
 “
 .B�]
-page 4: 34 [Hfflabc😀é�
-ΩBaaabac�X
+page 4: 37 [Hfflabc😀é�
+ΩBaaabac�Xfia
 hit]
 page 5: 21 [page
 form
@@ -113,7 +113,7 @@ page 1: -7
 open 1
 page 1: 16639
 # each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds
-hand.pdf: 1255 files read
+hand.pdf: 1258 files read
 gs.pdf: 1725 files read
 gsobj.pdf: 1489 files read
 cairo.pdf: 2115 files read

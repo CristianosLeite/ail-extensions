@@ -11,7 +11,8 @@
 # number that is counted down by inflatetables each time the tables of
 # a block are made, which a block of a few bytes can ask for: a caller
 # that counts the bytes it gives and the bytes it gets has then counted
-# all that the call costs. inflate returns
+# all that the call costs. After a failure the work is also counted
+# down by one for every 16 bytes that were unpacked and are not given. inflate returns
 # the number of bytes of the data that it read, up to the end of the
 # last block, so that the caller sees what follows; inflatezlib returns
 # the number of bytes added, after it has compared their Adler-32 with
@@ -438,14 +439,21 @@ fn inflate inflatep inflaten inflateb inflatemax inflatewk
 	store inflateb+8 inflateoutn
 	ret inflatepos-(inflatebits>>3)
 	label fail
-	store inflateb+8 inflatestart
-	ret inflatebad
+	inflater=inflatebad
+	jmp gone
 	label big
-	store inflateb+8 inflatestart
-	ret inflatebig
+	inflater=inflatebig
+	jmp gone
 	label nomem
+	inflater=inflatemem
+	label gone
+	# what was unpacked and is not given was work all the same
+	if inflatewk
+		load inflatewk as inflatew
+		store inflatewk inflatew-(inflateoutn-inflatestart>>4)
+	end
 	store inflateb+8 inflatestart
-	ret inflatemem
+	ret inflater
 end
 
 # the Adler-32 of the inflaten bytes at inflatep
