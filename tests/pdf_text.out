@@ -1,5 +1,5 @@
-# a file written by hand: the operators that show and place text, spaces and line feeds from the places, the encodings, ToUnicode, forms, an inline image, contents in two streams, pages below a node, and pages that cannot be read among them
-pages 13
+# a file written by hand: the operators that show and place text, spaces and line feeds from the places, the encodings, ToUnicode, forms, an inline image, contents in two streams, pages below a node, pages that cannot be read among them, and names of resources written with a number sign
+pages 14
 page 1: 64 [Hello world
 second line
 third
@@ -29,9 +29,11 @@ page 9: -95 []
 page 10: -5 []
 page 11: -95 []
 page 12: 10 [still here]
-page 13: 0 []
+page 13: 39 [a name written with a number sign
+inner]
+page 14: 0 []
 page 0: -34 []
-page 14: -34 []
+page 15: -34 []
 page 1: 64 [Hello world
 second line
 third
@@ -69,12 +71,12 @@ Plain words, an office and a fine affliction.
 Café naïve façade — “quotes” and a dash.
 Ελληνικά and кириллица.]
 page 2: 25 [Page two of the document.]
-# the work a document may cost: this file takes 377 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so
+# the work a document may cost: this file takes 395 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so
 open -7
-open 13
+open 14
 page 1: -7 []
 page 8: -7 []
-open 13
+open 14
 page 1: 64 [Hello world
 second line
 third
@@ -86,14 +88,19 @@ page 8: -7 []
 page 1: -7 []
 # the memory it may hold: 2000 bytes are too few for its objects and its pages
 open -7
-# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; pages below one another without end
+# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; pages below one another without end; a page of 1000 streams of 10000 blocks that unpack to nothing
 open 1
 page 1: -7 []
 open 1
 page 1: -7 []
 open -7
+open 1
+page 1: -7 []
+# the 400 streams again with work for all of them: they are held together, and 64 MiB of memory are not enough
+open 1
+page 1: -7 []
 # each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds
-hand.pdf: 1140 files read
+hand.pdf: 1180 files read
 gs.pdf: 1725 files read
 gsobj.pdf: 1489 files read
 cairo.pdf: 2115 files read

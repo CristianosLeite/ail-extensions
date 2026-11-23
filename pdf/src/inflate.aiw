@@ -2,11 +2,16 @@
 # the same in the wrapping of zlib (RFC 1950), added to a buffer of
 # lib/std/bytes.aiw. A program that uses it uses lib/std/bytes.aiw first.
 #
-#   inflate p n b max       the n bytes at p are DEFLATE data
-#   inflatezlib p n b max   the n bytes at p are a stream of zlib
+#   inflate p n b max wk       the n bytes at p are DEFLATE data
+#   inflatezlib p n b max wk   the n bytes at p are a stream of zlib
 #
 # Both add what the data unpacks to at the end of the buffer b, max
-# bytes at most, and read nothing outside the n bytes. inflate returns
+# bytes at most, and read nothing outside the n bytes. wk is 0, or the
+# address of eight bytes with the work the call may still do, a signed
+# number that is counted down by inflatetables each time the tables of
+# a block are made, which a block of a few bytes can ask for: a caller
+# that counts the bytes it gives and the bytes it gets has then counted
+# all that the call costs. inflate returns
 # the number of bytes of the data that it read, up to the end of the
 # last block, so that the caller sees what follows; inflatezlib returns
 # the number of bytes added, after it has compared their Adler-32 with
@@ -19,7 +24,8 @@
 #                      before the first byte, data that ends before its
 #                      last block does, a header of zlib that is none or
 #                      asks for a dictionary, a sum that differs
-#   inflatebig   -27   the data unpacks to more than max bytes
+#   inflatebig   -27   the data unpacks to more than max bytes, or the
+#                      work at wk is used up
 #   inflatemem   -12   the kernel has no memory
 #
 # A code that leaves some bit strings without a meaning is taken, as
@@ -36,6 +42,9 @@
 const inflatebad -22
 const inflatebig -27
 const inflatemem -12
+# what making the tables of a block counts as, in the units of a
+# caller that counts one for 16 bytes: two tables of 65536 bytes
+const inflatetables 4100
 
 # the first length and the first distance that a symbol stands for, two
 # bytes each, and the number of bits that follow the symbol
@@ -121,7 +130,7 @@ fn inflatetable inflatel inflaten inflatet inflatetb
 	ret 0
 end
 
-fn inflate inflatep inflaten inflateb inflatemax
+fn inflate inflatep inflaten inflateb inflatemax inflatewk
 	local inflatelit 65536
 	local inflatedist 65536
 	local inflateclen 256
@@ -167,6 +176,14 @@ fn inflate inflatep inflaten inflateb inflatemax
 	jeq inflatetype 3 fail
 	if inflatetype==1
 		ifz inflatefixed
+			if inflatewk
+				load inflatewk as inflatew
+				inflatew-=inflatetables
+				store inflatewk inflatew
+				ifslt inflatew 0
+					jmp big
+				end
+			end
 			inflatei=0
 			while inflatei<288
 				inflatek=8
@@ -190,6 +207,14 @@ fn inflate inflatep inflaten inflateb inflatemax
 		end
 	else
 		inflatefixed=0
+		if inflatewk
+			load inflatewk as inflatew
+			inflatew-=inflatetables
+			store inflatewk inflatew
+			ifslt inflatew 0
+				jmp big
+			end
+		end
 		jlt inflatebits 14 fail
 		inflatehlit=(inflatehold&31)+257
 		inflatehdist=(inflatehold>>5&31)+1
@@ -447,7 +472,7 @@ fn inflateadler inflatep inflaten
 	ret inflates<<16|inflatea
 end
 
-fn inflatezlib inflatep inflaten inflateb inflatemax
+fn inflatezlib inflatep inflaten inflateb inflatemax inflatewk
 	if inflaten<6
 		ret inflatebad
 	end
@@ -459,7 +484,7 @@ fn inflatezlib inflatep inflaten inflateb inflatemax
 		ret inflatebad
 	end
 	load inflateb+8 as inflatestart
-	call inflate inflatep+2 inflaten-2 inflateb inflatemax as inflater
+	call inflate inflatep+2 inflaten-2 inflateb inflatemax inflatewk as inflater
 	ifslt inflater 0
 		ret inflater
 	end

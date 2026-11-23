@@ -1,8 +1,8 @@
 # pdf/src/pdfobj.aiw -- the syntax of the objects of a PDF file (ISO
 # 32000-1, 7.2 and 7.3), read where the bytes lie: white space and
 # comments, a token, the end of a whole value, the value of a key of a
-# dictionary, the elements of an array, a number, a name and the bytes
-# of a string. A program that uses it uses lib/std/bytes.aiw first.
+# dictionary, the elements of an array, a number, a name as its bytes
+# and the bytes of a string. A program that uses it uses lib/std/bytes.aiw first.
 #
 # Bytes are two addresses, that of the first and that after the last,
 # here a and e; nothing is read at e or after it and nothing is written
@@ -319,6 +319,35 @@ fn pdfobjis pdfobja pdfobjn pdfobjkp pdfobjkn
 		pdfobji+=1
 	end
 	ret pdfobji==pdfobjkn
+end
+
+# Write the name of the token from pdfobja to pdfobjn, without its "/" and with
+# each "#" and two hexadecimal digits as the byte they write, to the
+# pdfobjmax bytes at pdfobjdst: the number of its bytes, or pdfobjmax+1 if they are
+# more.
+fn pdfobjnamed pdfobja pdfobjn pdfobjdst pdfobjmax
+	pdfobja+=1
+	pdfobji=0
+	while pdfobja<pdfobjn
+		loadb pdfobja as pdfobjc
+		pdfobja+=1
+		if (pdfobjc==35)&(pdfobja+2<=pdfobjn)
+			loadb pdfobja as pdfobjx
+			loadb pdfobja+1 as pdfobjy
+			call pdfobjdigit pdfobjx as pdfobjx
+			call pdfobjdigit pdfobjy as pdfobjy
+			if (pdfobjx<16)&(pdfobjy<16)
+				pdfobjc=pdfobjx*16+pdfobjy
+				pdfobja+=2
+			end
+		end
+		if pdfobji>=pdfobjmax
+			ret pdfobjmax+1
+		end
+		storeb pdfobjdst+pdfobji pdfobjc
+		pdfobji+=1
+	end
+	ret pdfobji
 end
 
 # The address of the value that the dictionary at pdfobja has for the key

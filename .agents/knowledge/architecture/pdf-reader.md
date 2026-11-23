@@ -79,6 +79,19 @@ rest, which is for the user to review (`status/open-items.md`).
   changes to both texts** (user, 2026-11-23: use it as the reference by page and say
   how white space is made equal): every run of white space one space, and NFKC for
   the ligatures.
+- **What the review of the pull request 6 found, fixed the same day** (Copilot,
+  2026-11-23; the fixes are the agent's). Work was counted for what a filter gives and
+  not for what it reads, so 10000 empty blocks cost nothing, and a block of a few bytes
+  could ask for tables of 131072 bytes: a filter's input is counted now, and `inflate`
+  takes the address of the work and counts 4100 for the tables of a block. The
+  contents of a page and of the forms on it were kept together without being counted
+  as memory, so 400 streams of 4 MiB were held with `mem` at 64 MiB: `pdfdochold`
+  counts them. No memory found by the inflater, a decoder or a string was the result
+  of one call, or a string left out of a page, and not the error of the document: it
+  is now, wherever it is found. A name of a resource written with `#` in the contents
+  was looked up as written and not found: it is looked up as its bytes. A file for each
+  of the first two and a page for the last are in `tests/pdf_text.aiw`; no test makes
+  the kernel refuse memory.
 
 ## What was seen and is not done
 - No file of LaTeX, LibreOffice, Word or a browser was made for the tests: none of

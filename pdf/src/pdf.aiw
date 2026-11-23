@@ -271,11 +271,16 @@ fn pdftext pdfd pdfst pdfa pdfe
 	ifz pdfr
 		ret 0
 	end
+	call pdfobjtok pdfa pdfe as pdfk pdfm
+	if (pdfk!=pdfobjstr)&(pdfk!=pdfobjhex)
+		ret 0
+	end
 	pdfb=pdfst+pdfsb
 	call bycut pdfb 0
 	call pdfobjstring pdfa pdfe pdfb as pdfw
 	ifz pdfw
-		ret 0
+		# a string, and no memory for its bytes: the page is not whole
+		tail pdfdocfail pdfd pdfdocmem
 	end
 	load pdfb as pdfp
 	load pdfb+8 as pdfn
@@ -348,6 +353,7 @@ end
 # make the font of the page the one that the Font resources name with
 # the token from pdfa to pdfm
 fn pdffont pdfd pdfst pdfra pdfre pdfa pdfm
+	local pdfnm 256
 	store pdfst+pdff 0
 	ifz pdfra
 		ret 0
@@ -356,7 +362,12 @@ fn pdffont pdfd pdfst pdfra pdfre pdfa pdfm
 	ifz pdfx
 		ret 0
 	end
-	call pdfdocget pdfd pdfx pdfxe pdfa+1 pdfm-pdfa-1 as pdffa pdffe
+	# the name as its bytes: /F#31 is F1
+	call pdfobjnamed pdfa pdfm pdfnm 256 as pdfn
+	if pdfn>256
+		ret 0
+	end
+	call pdfdocget pdfd pdfx pdfxe pdfnm pdfn as pdffa pdffe
 	ifz pdffa
 		ret 0
 	end
@@ -409,6 +420,7 @@ fn pdfform pdfd pdfst pdfra pdfre pdfa pdfm
 	local pdfc 24
 	local pdfsv 96
 	local pdfmx 48
+	local pdfnm 256
 	ifz pdfra
 		ret 0
 	end
@@ -416,7 +428,11 @@ fn pdfform pdfd pdfst pdfra pdfre pdfa pdfm
 	ifz pdfx
 		ret 0
 	end
-	call pdfdocget pdfd pdfx pdfxe pdfa+1 pdfm-pdfa-1 as pdffa pdffe
+	call pdfobjnamed pdfa pdfm pdfnm 256 as pdfn
+	if pdfn>256
+		ret 0
+	end
+	call pdfdocget pdfd pdfx pdfxe pdfnm pdfn as pdffa pdffe
 	ifz pdffa
 		ret 0
 	end
@@ -450,6 +466,14 @@ fn pdfform pdfd pdfst pdfra pdfre pdfa pdfm
 		call byfree pdfc
 		ret pdfr
 	end
+	# its contents are held while it is drawn, with those of the page
+	# and of the forms around it
+	load pdfc+16 as pdfheld
+	call pdfdochold pdfd pdfheld as pdfw
+	ifz pdfw
+		call byfree pdfc
+		ret 0
+	end
 	store pdfst+pdffst+pdfdep*8 pdffa
 	store pdfst+pdfdp pdfdep+1
 	call pdfsave pdfst pdfsv
@@ -478,6 +502,7 @@ fn pdfform pdfd pdfst pdfra pdfre pdfa pdfm
 	call pdfback pdfst pdfsv
 	store pdfst+pdfdp pdfdep
 	call byfree pdfc
+	call pdfdocdrop pdfd pdfheld
 	ret pdfr
 end
 
@@ -841,6 +866,7 @@ fn pdfpage pdfd pdfi pdfout
 	store pdfc+8 0
 	store pdfc+16 0
 	load pdfout+8 as pdfstart
+	pdfheld=0
 	store pdfst pdfout
 	store pdfst+pdfps pdfstart
 	store pdfst+pdftz 1000
@@ -862,6 +888,11 @@ fn pdfpage pdfd pdfi pdfout
 			call pdfstmdata pdfd pdfx pdfxe pdfc as pdfr
 			jnz pdfr done
 			call byaddb pdfc 10 as pdfw
+			# the streams read so far are held, and count
+			load pdfc+16 as pdfx
+			call pdfdochold pdfd pdfx-pdfheld as pdfw
+			jz pdfw done
+			pdfheld=pdfx
 			call pdfobjnext pdfq pdfve as pdfq
 			jmp each
 		end
@@ -869,12 +900,17 @@ fn pdfpage pdfd pdfi pdfout
 		call pdfstmdata pdfd pdfv pdfve pdfc as pdfr
 		jnz pdfr done
 	end
+	load pdfc+16 as pdfx
+	call pdfdochold pdfd pdfx-pdfheld as pdfw
+	jz pdfw done
+	pdfheld=pdfx
 	label read
 	load pdfc as pdfp
 	load pdfc+8 as pdfn
 	call pdfrun pdfd pdfst pdfp pdfp+pdfn pdfra pdfre as pdfr
 	label done
 	call byfree pdfc
+	call pdfdocdrop pdfd pdfheld
 	call byfree pdfst+pdfsb
 	call pdfdocerr pdfd as pdfx
 	if pdfx

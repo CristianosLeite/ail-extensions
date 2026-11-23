@@ -169,7 +169,7 @@ fn intime
 		call print "too slow\n"
 	end
 end
-call print "# a file written by hand: the operators that show and place text, spaces and line feeds from the places, the encodings, ToUnicode, forms, an inline image, contents in two streams, pages below a node, and pages that cannot be read among them\n"
+call print "# a file written by hand: the operators that show and place text, spaces and line feeds from the places, the encodings, ToUnicode, forms, an inline image, contents in two streams, pages below a node, pages that cannot be read among them, and names of resources written with a number sign\n"
 call file "tests/data/hand.pdf"
 call page 1
 call page 2
@@ -184,8 +184,9 @@ call page 10
 call page 11
 call page 12
 call page 13
-call page 0
 call page 14
+call page 0
+call page 15
 call page 1
 call pdfclose d
 call print "# files of Ghostscript and of cairo: a table and ToUnicode, a cross reference stream with an object stream and no ToUnicode, object streams with fonts of two bytes\n"
@@ -208,20 +209,20 @@ call file "tests/data/cairo.pdf"
 call page 1
 call page 2
 call pdfclose d
-call print "# the work a document may cost: this file takes 377 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so\n"
-call cost "tests/data/hand.pdf" 376 1000000
-call cost "tests/data/hand.pdf" 377 1000000
+call print "# the work a document may cost: this file takes 395 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so\n"
+call cost "tests/data/hand.pdf" 394 1000000
+call cost "tests/data/hand.pdf" 395 1000000
 call page 1
 call page 8
 call pdfclose d
-call cost "tests/data/hand.pdf" 787 1000000
+call cost "tests/data/hand.pdf" 805 1000000
 call page 1
 call page 8
 call page 1
 call pdfclose d
 call print "# the memory it may hold: 2000 bytes are too few for its objects and its pages\n"
 call cost "tests/data/hand.pdf" 100000 2000
-call print "# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; pages below one another without end\n"
+call print "# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; pages below one another without end; a page of 1000 streams of 10000 blocks that unpack to nothing\n"
 call cost "tests/data/forms.pdf" 2000000 67108864
 call page 1
 call pdfclose d
@@ -229,6 +230,13 @@ call cost "tests/data/streams.pdf" 2000000 67108864
 call page 1
 call pdfclose d
 call cost "tests/data/tree.pdf" 2000000 67108864
+call cost "tests/data/blocks.pdf" 2000000 67108864
+call page 1
+call pdfclose d
+call print "# the 400 streams again with work for all of them: they are held together, and 64 MiB of memory are not enough\n"
+call cost "tests/data/streams.pdf" 2000000000 67108864
+call page 1
+call pdfclose d
 call print "# each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds\n"
 call clock
 call harm "tests/data/hand.pdf"

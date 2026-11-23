@@ -136,6 +136,22 @@ fn pdfdocrelease pdfdocd pdfdoca pdfdocn
 	end
 end
 
+# count pdfdocn bytes that the caller holds in a buffer of its own against
+# the memory of the document: 1, or 0 if it has not so many left, and
+# then the document is spent; pdfdocdrop counts them back
+fn pdfdochold pdfdocd pdfdocn
+	load pdfdocd+40 as pdfdocm
+	if pdfdocn>pdfdocm
+		tail pdfdocfail pdfdocd pdfdocspent
+	end
+	store pdfdocd+40 pdfdocm-pdfdocn
+	ret 1
+end
+fn pdfdocdrop pdfdocd pdfdocn
+	load pdfdocd+40 as pdfdocm
+	store pdfdocd+40 pdfdocm+pdfdocn
+end
+
 # the address of the last place where the pdfdockn bytes at pdfdockp are among
 # those from pdfdoca to pdfdoce, or 0
 fn pdfdoclast pdfdoca pdfdoce pdfdockp pdfdockn

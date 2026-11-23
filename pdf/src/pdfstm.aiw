@@ -21,12 +21,16 @@
 # or the error of the document, if its work or its memory is used up
 # (pdfdocspent), or the kernel has none (pdfdocmem).
 #
+# What pdfstmdata adds to out is the caller's to count as memory, with
+# pdfdochold, if it keeps more than one such buffer at a time.
+#
 # The length of the bytes is the one the dictionary says, if the word
 # endstream follows them there; else they end before the first
 # endstream. Data of FlateDecode whose Adler-32 is wrong or missing is
 # taken if its last block ends. A row of a predictor that the bytes end
 # in is left out. What a filter unpacks to is at most the memory the
-# document has left, and its bytes count as work.
+# document has left; the bytes it reads and the bytes it gives count as
+# work, and so do the tables of each block of FlateDecode.
 #
 # Every name of this file starts with "pdfstm"; a program has no var
 # of such a name (see lib/std/io.aiw).
@@ -417,18 +421,24 @@ fn pdfstmdata pdfstmd pdfstma pdfstme pdfstmout
 	end
 	call bycut pdfstmt 0
 	pdfstms+=1
+	# what the filter reads is work, whatever it gives
+	call pdfdocspend pdfstmd (pdfstmn>>4)+1 as pdfstmw
+	jz pdfstmw done
 	pdfstmr=pdfstmfilter
 	call pdfobjis pdfstmv pdfstmm "FlateDecode" as pdfstmx
 	call pdfobjis pdfstmv pdfstmm "Fl" as pdfstmy
 	if pdfstmx|pdfstmy
 		load pdfstmd+40 as pdfstmmax
-		call inflatezlib pdfstmp pdfstmn pdfstmt pdfstmmax as pdfstmr
+		call inflatezlib pdfstmp pdfstmn pdfstmt pdfstmmax pdfstmd+32 as pdfstmr
 		if (pdfstmr==inflatebad)&(pdfstmn>2)
 			# a sum that is wrong or not there
-			call inflate pdfstmp+2 pdfstmn-2 pdfstmt pdfstmmax as pdfstmr
+			call inflate pdfstmp+2 pdfstmn-2 pdfstmt pdfstmmax pdfstmd+32 as pdfstmr
 		end
 		if pdfstmr==inflatebig
 			call pdfdocfail pdfstmd pdfdocspent
+		end
+		if pdfstmr==inflatemem
+			call pdfdocfail pdfstmd pdfdocmem
 		end
 		ifslt pdfstmr 0
 			pdfstmr=pdfstmbad
@@ -498,6 +508,10 @@ fn pdfstmdata pdfstmd pdfstma pdfstme pdfstmout
 	label done
 	call byfree pdfstmt1
 	call byfree pdfstmt2
+	# no memory is an error of the document, whoever found it
+	if pdfstmr==pdfdocmem
+		call pdfdocfail pdfstmd pdfdocmem
+	end
 	call pdfdocerr pdfstmd as pdfstmx
 	if pdfstmx
 		ret pdfstmx
