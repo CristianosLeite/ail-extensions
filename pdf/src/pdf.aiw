@@ -10,13 +10,24 @@
 # written to them, and they are to stay as they are, at their address,
 # until pdfclose. work and mem are what the document may cost
 # (pdf/src/pdfdoc.aiw): about one of work for every 16 bytes that are
-# looked at or unpacked and for every object, operator and code, and
-# the bytes that may be allocated at one time.
+# looked at, unpacked or added as text and for every object, operator
+# and code, and the bytes that may be allocated at one time. The buffer
+# out is the caller's and is not counted, but the text of one page is
+# at most the memory the document has left when it is read: a page
+# with more makes the document spent. What a caller keeps in out from
+# page to page is its own to limit; the work bounds it, 16 bytes of
+# text a unit.
+#
+# The pages are numbered as the page tree has them: a kid of a node
+# that is no dictionary is a page with its number that cannot be read
+# (pdfbad), so that no page after it has another number than in other
+# readers.
 #
 # pdfopen returns the number of pages, 0 for a file that has none, or
 # a negative number, after which d needs no pdfclose:
 #
-#   pdfdocbad     -22  no PDF file, or one whose structure cannot be read
+#   pdfdocbad     -22  no PDF file, or one whose structure cannot be
+#                      read; one whose page tree is more than 64 deep
 #   pdfdoclocked  -13  the file is encrypted
 #   pdfdocspent    -7  the work or the memory allowed is used up
 #   pdfdocmem     -12  the kernel has no memory
@@ -26,8 +37,9 @@
 # negative number, and then out is as it was at the call, with nothing
 # of the page in it. An error of the page leaves the others readable:
 #
-#   pdfbad         -5  the contents of the page are not well formed, or
-#                      a stream of them cannot be unpacked
+#   pdfbad         -5  the page is no dictionary, its contents are not
+#                      well formed, or a stream of them cannot be
+#                      unpacked
 #   pdffilter     -95  a stream of the page, of its contents or of a
 #                      form drawn on it, has a filter that is not known;
 #                      the page has no text then, even if another of its
@@ -185,7 +197,8 @@ fn pdfpen pdfst
 end
 
 # put a line feed or a space before the string that is about to be
-# shown, if it starts off the line of the one before or after a gap
+# shown, if it starts off the line of the one before or after a gap:
+# 0, or pdfdocmem if there is no memory for it
 fn pdfgap pdfst
 	load pdfst+pdfhv as pdfh
 	ifz pdfh
@@ -239,7 +252,11 @@ fn pdfgap pdfst
 		storeb pdfp+pdfn-1 10
 		ret 0
 	end
-	call byaddb pdfb pdfc
+	call byaddb pdfb pdfc as pdfw
+	ifz pdfw
+		ret pdfdocmem
+	end
+	ret 0
 end
 
 # move the text matrix along its line by pdftx
@@ -291,7 +308,10 @@ fn pdftext pdfd pdfst pdfa pdfe
 	ifz pdfw
 		ret 0
 	end
-	call pdfgap pdfst
+	call pdfgap pdfst as pdfw
+	if pdfw
+		tail pdfdocfail pdfd pdfdocmem
+	end
 	load pdfst as pdfo
 	load pdfst+pdffs as pdffsz
 	load pdfst+pdftc as pdfc
@@ -307,6 +327,8 @@ fn pdftext pdfd pdfst pdfa pdfe
 	ifsgt pdfc*100 pdfem*15
 		pdfbig=1
 	end
+	load pdfr+8 as pdfwide
+	load pdfo+8 as pdfo0
 	pdfsum=0
 	pdfi=0
 	while pdfi<pdfn
@@ -315,11 +337,16 @@ fn pdftext pdfd pdfst pdfa pdfe
 		call pdfm3 pdfw pdffsz as pdfw
 		pdfw+=pdfc
 		pdfx=1
-		if pdfcode==32
-			# a space that the word spacing takes back is none
+		if (pdfcode==32)&(pdfwide==0)
+			# the word spacing is for the code 32 of one byte, whatever
+			# its glyph; a space that it takes back is none, but a
+			# letter at that code stays
 			pdfw+=pdfws
-			ifslt pdfw*20 pdfem
-				pdfx=0
+			call pdffontspace pdfr pdfcode as pdfk
+			if pdfk
+				ifslt pdfw*20 pdfem
+					pdfx=0
+				end
 			end
 		end
 		pdfsum+=pdfw
@@ -330,11 +357,18 @@ fn pdftext pdfd pdfst pdfa pdfe
 			end
 		end
 		if pdfbig&(pdfi<pdfn)
+			# after a character of this page that is no space
 			load pdfo as pdfq
 			load pdfo+8 as pdfk
-			loadb pdfq+pdfk-1 as pdfx
-			if pdfx!=32
-				call byaddb pdfo 32
+			load pdfst+pdfps as pdfx
+			if pdfk>pdfx
+				loadb pdfq+pdfk-1 as pdfx
+				if pdfx!=32
+					call byaddb pdfo 32 as pdfw
+					ifz pdfw
+						tail pdfdocfail pdfd pdfdocmem
+					end
+				end
 			end
 		end
 	end
@@ -348,6 +382,15 @@ fn pdftext pdfd pdfst pdfa pdfe
 	store pdfst+pdfhv 1
 	call pdfm3 pdfc pdfz as pdfsum
 	call pdfadv pdfst pdfsum
+	# the text is work as it is added, and all of a page is at most the
+	# memory the document has left
+	load pdfo+8 as pdfk
+	call pdfdocspend pdfd pdfk-pdfo0>>4 as pdfw
+	load pdfst+pdfps as pdfx
+	load pdfd+40 as pdfm
+	if pdfk-pdfx>pdfm
+		call pdfdocfail pdfd pdfdocspent
+	end
 end
 
 # make the font of the page the one that the Font resources name with
@@ -769,7 +812,15 @@ fn pdftree pdfd
 	call pdfdocspend pdfd 2 as pdfw
 	jz pdfw out
 	call pdfobjtok pdfna pdfne as pdfk pdfm
-	jne pdfk pdfobjdict up
+	if pdfk!=pdfobjdict
+		# a kid that is no dictionary is a page that cannot be read:
+		# it has its number, so that the pages after it keep theirs
+		if pdfdep
+			call pdfaddpage pdfd 0 0 0 0 as pdfw
+			jz pdfw out
+		end
+		jmp up
+	end
 	call pdfdocget pdfd pdfna pdfne "Resources" as pdfx pdfxe
 	if pdfx
 		pdfra=pdfx
@@ -779,8 +830,13 @@ fn pdftree pdfd
 	if pdfq
 		call pdfobjfirst pdfq pdfqe as pdfq
 		jz pdfq up
-		# not deeper than 64, and no node below itself
-		jge pdfdep 64 up
+		# no node below itself; deeper than 64 the pages cannot be
+		# counted, and a page left out would give those after it the
+		# wrong number, so the document is not read
+		if pdfdep>=64
+			call pdfdocfail pdfd pdfdocbad
+			jmp out
+		end
 		pdfi=0
 		while pdfi<pdfdep
 			load pdfstk+pdfi*40+32 as pdfx
@@ -854,6 +910,9 @@ fn pdfpage pdfd pdfi pdfout
 	load pdfd+128 as pdft
 	pdft+=pdfi*32-32
 	load pdft as pdfpa
+	ifz pdfpa
+		ret pdfbad
+	end
 	load pdft+8 as pdfpe
 	load pdft+16 as pdfra
 	load pdft+24 as pdfre
@@ -888,6 +947,10 @@ fn pdfpage pdfd pdfi pdfout
 			call pdfstmdata pdfd pdfx pdfxe pdfc as pdfr
 			jnz pdfr done
 			call byaddb pdfc 10 as pdfw
+			ifz pdfw
+				call pdfdocfail pdfd pdfdocmem
+				jmp done
+			end
 			# the streams read so far are held, and count
 			load pdfc+16 as pdfx
 			call pdfdochold pdfd pdfx-pdfheld as pdfw

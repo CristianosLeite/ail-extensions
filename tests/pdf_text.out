@@ -1,5 +1,5 @@
-# a file written by hand: the operators that show and place text, spaces and line feeds from the places, the encodings, ToUnicode, forms, an inline image, contents in two streams, pages below a node, pages that cannot be read among them, and names of resources written with a number sign
-pages 14
+# a file written by hand: the operators that show and place text, spaces and line feeds from the places, the encodings, ToUnicode, forms, an inline image, contents in two streams, pages below a node, pages that cannot be read among them, a kid that is no page and has a number all the same, names of resources written with a number sign, and a space that is taken back before any text
+pages 16
 page 1: 64 [Hello world
 second line
 third
@@ -15,8 +15,9 @@ page 3: 40 [fi€aΩx😀cZé1
 fi’‘
 “
 .B�]
-page 4: 20 [Hfflabc😀é�
-ΩB]
+page 4: 33 [Hfflabc😀é�
+ΩBaaabac�
+hit]
 page 5: 21 [page
 form
 inner
@@ -31,9 +32,11 @@ page 11: -95 []
 page 12: 10 [still here]
 page 13: 39 [a name written with a number sign
 inner]
-page 14: 0 []
+page 14: 1 [A]
+page 15: 0 []
+page 16: -5 []
 page 0: -34 []
-page 15: -34 []
+page 17: -34 []
 page 1: 64 [Hello world
 second line
 third
@@ -71,12 +74,12 @@ Plain words, an office and a fine affliction.
 Café naïve façade — “quotes” and a dash.
 Ελληνικά and кириллица.]
 page 2: 25 [Page two of the document.]
-# the work a document may cost: this file takes 395 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so
+# the work a document may cost: this file takes 418 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so
 open -7
-open 14
+open 16
 page 1: -7 []
 page 8: -7 []
-open 14
+open 16
 page 1: 64 [Hello world
 second line
 third
@@ -88,7 +91,7 @@ page 8: -7 []
 page 1: -7 []
 # the memory it may hold: 2000 bytes are too few for its objects and its pages
 open -7
-# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; pages below one another without end; a page of 1000 streams of 10000 blocks that unpack to nothing
+# files made to cost much: a form that draws eight forms, twelve deep; a page of 400 streams of 4 MiB each; thirty kids a node of the page tree, sixty deep; a page of 1000 streams of 10000 blocks that unpack to nothing
 open 1
 page 1: -7 []
 open 1
@@ -99,8 +102,16 @@ page 1: -7 []
 # the 400 streams again with work for all of them: they are held together, and 64 MiB of memory are not enough
 open 1
 page 1: -7 []
+# a page tree 65 deep is no document, since its pages could not be numbered; 64 deep it is read
+open 1
+open -22
+# the text of a page is at most the memory left: 256 lines of 64 bytes, with 12000 bytes and with a million
+open 1
+page 1: -7
+open 1
+page 1: 16639
 # each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds
-hand.pdf: 1180 files read
+hand.pdf: 1251 files read
 gs.pdf: 1725 files read
 gsobj.pdf: 1489 files read
 cairo.pdf: 2115 files read

@@ -92,6 +92,23 @@ rest, which is for the user to review (`status/open-items.md`).
   was looked up as written and not found: it is looked up as its bytes. A file for each
   of the first two and a page for the last are in `tests/pdf_text.aiw`; no test makes
   the kernel refuse memory.
+- **What two more reviews found, fixed the same day** (the user, with files that show
+  each, and Copilot's second review, 2026-11-23). A page left out moved the numbers of
+  those after it: beyond 64 levels a branch of the page tree was given up and the
+  leaves found were numbered on, so text of page 2 came out as page 1. A tree that
+  deep is now no document, and a kid that is no dictionary is a page with its number
+  that cannot be read. A letter at the code 32 (`/Differences [32 /i]`) was taken for a
+  space and could be left out: only a code whose character is U+0020 is, and the word
+  spacing is for fonts of one byte alone. A run of a ToUnicode CMap whose destination
+  is several characters gave the same characters to every code: the last byte of the
+  destination is counted up for each, before it is read. The text of a page was not
+  counted: it is work as it is added, and a page of more text than the memory left
+  makes the document spent; what the caller keeps in its buffer over pages is the
+  caller's, which the README says. The bytes a font keeps for codes of several
+  characters count as memory. A character spacing wider than a gap looked at the
+  byte before the buffer when the page had no text yet. Half a surrogate pair and a
+  value above U+10FFFF are written as U+FFFD, so that the text is UTF-8. No memory for
+  a space or a line feed that the reader puts in is the error of the document.
 
 ## What was seen and is not done
 - No file of LaTeX, LibreOffice, Word or a browser was made for the tests: none of

@@ -6,6 +6,7 @@
 #   pdffontnext r p n i      the code at the place i of a string
 #   pdffonttext r code b     add the characters of a code, as UTF-8
 #   pdffontwidth r code      the width of its glyph, in thousandths
+#   pdffontspace r code      whether it is the space of a font of one byte
 #   pdffontfree d r          give the font back
 #
 # d is a document of pdf/src/pdfdoc.aiw, whose memory and work the font
@@ -47,8 +48,9 @@ use "pdf/src/pdfstm.aiw"
 # (8), the table of the codes (16: four bytes a code, the character, or
 # with the highest bit the place in the bytes at 32 of several, the low
 # 24 bits, and their number, the 7 above), the widths (24: two bytes a
-# code) and the characters of the codes that have several (32: a buffer
-# of lib/std/bytes.aiw).
+# code), the characters of the codes that have several (32: a buffer
+# of lib/std/bytes.aiw) and how many bytes of that buffer were counted
+# as memory of the document (56).
 const pdffontsize 64
 
 # the characters of the codes 0 to 255 in the three encodings, two
@@ -258,8 +260,14 @@ fn pdffontput pdffontr pdffontcode pdffontv
 	end
 end
 
-# add the character pdffontcp to the buffer pdffontb as UTF-8: 1, or 0
+# add the character pdffontcp to the buffer pdffontb as UTF-8, U+FFFD if it is
+# none: 1, or 0
 fn pdffontutf8 pdffontb pdffontcp
+	# half of a surrogate pair, and what is above the last character,
+	# are no characters
+	if ((pdffontcp>=0xd800)&(pdffontcp<0xe000))|(pdffontcp>0x10ffff)
+		pdffontcp=0xfffd
+	end
 	if pdffontcp<0x80
 		tail byaddb pdffontb pdffontcp
 	end
@@ -315,6 +323,19 @@ fn pdffonttext pdffontr pdffontcode pdffontb
 	tail pdffontutf8 pdffontb pdffontv
 end
 
+# 1 if the code is one byte and stands for a space, the character
+# U+0020: what the word spacing of a page is added to, and what a
+# reader may leave out when that spacing takes it back
+fn pdffontspace pdffontr pdffontcode
+	load pdffontr+8 as pdffontw
+	if pdffontw|(pdffontcode!=32)
+		ret 0
+	end
+	load pdffontr+16 as pdffontm
+	load4 pdffontm+128 as pdffontv
+	ret pdffontv==32
+end
+
 fn pdffontwidth pdffontr pdffontcode
 	load pdffontr+8 as pdffontw
 	pdffontl=256
@@ -330,9 +351,10 @@ fn pdffontwidth pdffontr pdffontcode
 end
 
 # The entry for the characters that the string at pdffonta writes in UTF-16,
-# the higher byte first; pdffontt is a buffer that it empties and uses. 0 if
+# the higher byte first, after pdffontadd was added to its last byte, as the
+# codes of a run have it; pdffontt is a buffer that it empties and uses. 0 if
 # it writes none.
-fn pdffontdst pdffontd pdffontr pdffonta pdffonte pdffontt
+fn pdffontdst pdffontd pdffontr pdffonta pdffonte pdffontt pdffontadd
 	call bycut pdffontt 0
 	call pdfobjstring pdffonta pdffonte pdffontt as pdffontw
 	ifz pdffontw
@@ -341,6 +363,11 @@ fn pdffontdst pdffontd pdffontr pdffonta pdffonte pdffontt
 	end
 	load pdffontt as pdffontp
 	load pdffontt+8 as pdffontn
+	ifz pdffontn
+		ret 0
+	end
+	loadb pdffontp+pdffontn-1 as pdffontc
+	storeb pdffontp+pdffontn-1 pdffontc+pdffontadd
 	if pdffontn==1
 		loadb pdffontp as pdffontc
 		ret pdffontc
@@ -432,21 +459,21 @@ fn pdffontcmap pdffontd pdffontr pdffonta pdffonte
 				call pdffonthexnum pdffontp+1 pdffontm-pdffontp-2 as pdffonthi
 				pdffontk=2
 			else
-				call pdffontdst pdffontd pdffontr pdffontp pdffonte pdffontt as pdffontv
 				pdffontk=0
 				if pdffontmode==1
+					call pdffontdst pdffontd pdffontr pdffontp pdffonte pdffontt 0 as pdffontv
 					call pdffontput pdffontr pdffontlo pdffontv
 				else
-					# the codes of a run have characters that follow one
-					# another, if each has one
+					# the codes of a run have the destination with its
+					# last byte counted up, also one of several characters
 					if (pdffonthi>=pdffontlo)&(pdffonthi-pdffontlo<65536)
-						call pdfdocspend pdffontd pdffonthi-pdffontlo as pdffontw
+						call pdfdocspend pdffontd (pdffonthi-pdffontlo)*4 as pdffontw
 						jz pdffontw done
+						pdffontx=0
 						while pdffontlo<=pdffonthi
+							call pdffontdst pdffontd pdffontr pdffontp pdffonte pdffontt pdffontx as pdffontv
 							call pdffontput pdffontr pdffontlo pdffontv
-							if (pdffontv!=0)&(pdffontv<0x10ffff)
-								pdffontv+=1
-							end
+							pdffontx+=1
 							pdffontlo+=1
 						end
 					end
@@ -461,7 +488,7 @@ fn pdffontcmap pdffontd pdffontr pdffonta pdffonte
 		label each
 		call pdfobjtok pdffontq pdffonte as pdffontkind pdffontx
 		if (pdffontkind==pdfobjhex)&(pdffontlo<=pdffonthi)
-			call pdffontdst pdffontd pdffontr pdffontq pdffonte pdffontt as pdffontv
+			call pdffontdst pdffontd pdffontr pdffontq pdffonte pdffontt 0 as pdffontv
 			call pdffontput pdffontr pdffontlo pdffontv
 			pdffontlo+=1
 			call pdfobjskip pdffontx pdffonte as pdffontq
@@ -778,6 +805,13 @@ fn pdffontmake pdffontd pdffonta pdffonte
 			call pdffontcmap pdffontd pdffontr pdffontv pdffontve
 		end
 	end
+	# the characters of the codes that have several are kept with the
+	# font, and count
+	load pdffontr+48 as pdffontn
+	call pdfdochold pdffontd pdffontn as pdffontw
+	if pdffontw
+		store pdffontr+56 pdffontn
+	end
 	ret pdffontr
 end
 
@@ -792,5 +826,7 @@ fn pdffontfree pdffontd pdffontr
 	load pdffontr+24 as pdffonta
 	call pdfdocrelease pdffontd pdffonta pdffontn*2
 	call byfree pdffontr+32
+	load pdffontr+56 as pdffonta
+	call pdfdocdrop pdffontd pdffonta
 	call pdfdocrelease pdffontd pdffontr pdffontsize
 end
