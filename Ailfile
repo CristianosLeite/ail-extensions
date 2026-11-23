@@ -6,5 +6,5 @@
 # The SDK needs lib/std/json.aiw, lib/std/num.aiw and the async library
 # of AIL, which the version 0.1.1 is the first to have.
 name ail-extensions
-version 0.1.0
+version 0.1.1
 ail 0.1.1
