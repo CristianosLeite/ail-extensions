@@ -41,6 +41,9 @@ line `ail` of `Ailfile`, fetched once.
 - **What the pin had hidden** (2026-11-22): it named a revision before `f4to8`, `f8to4` and
   `fdot4`, so the check never met them; against the tag `v0.1.0` it found them uncoloured,
   and the grammar got them in a commit of its own.
+- **0.1.1, with AIL** (user, 2026-11-22: "migrate all to the version 0.1.1", the line `ail`
+  and the version of each package): the manifest is `version 0.1.1` and `ail 0.1.1`, and
+  the tag `v0.1.1` is what a program now names. The tag `v0.1.0` stays, with `ail 0.1.0`.
 
 ## Gotchas
 - The version of the line `ail` must be a tag `v<version>` of the published repository, or

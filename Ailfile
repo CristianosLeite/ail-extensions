@@ -3,8 +3,8 @@
 # dependency and reads a file of it, for the MCP server SDK
 #   use "ail-extensions:mcp/src/mcp.aiw"
 # The modules for editors are no AIL and have nothing built from here.
-# The SDK needs an AIL that has lib/std/json.aiw, lib/std/num.aiw and
-# the async library, which came after the version 0.1.0.
+# The SDK needs lib/std/json.aiw, lib/std/num.aiw and the async library
+# of AIL, which the version 0.1.1 is the first to have.
 name ail-extensions
-version 0.1.0
-ail 0.1.0
+version 0.1.1
+ail 0.1.1
