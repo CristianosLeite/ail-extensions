@@ -74,7 +74,7 @@ Plain words, an office and a fine affliction.
 Café naïve façade — “quotes” and a dash.
 Ελληνικά and кириллица.]
 page 2: 25 [Page two of the document.]
-# the work a document may cost: this file takes 418 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so
+# the work a document may cost: this file takes 554 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so
 open -7
 open 16
 page 1: -7 []
@@ -112,12 +112,14 @@ open 1
 page 1: -7, room within 28096
 open 1
 page 1: 16639
-# contents that are an array: one that a string without its end cuts short and one that the bytes end in are no contents, though a stream before could be read; between them a page of two streams
-pages 3
+# contents that are an array: one that a string without its end cuts short and one that the bytes end in are no contents, though a stream before could be read; between them a page of two streams; then contents that are null, which is a page of no text, and null for the resources of a page and for the filter of its stream, which are as not there
+pages 5
 page 1: -5 []
 page 2: 7 [one
 two]
 page 3: -5 []
+page 4: 0 []
+page 5: 5 [three]
 # each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds
 hand.pdf: 1258 files read
 gs.pdf: 1725 files read

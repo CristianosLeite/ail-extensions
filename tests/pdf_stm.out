@@ -76,6 +76,18 @@ open 0
 open 0
 4: 0 <A
 err 0
+# a stream of no bytes with 16000 bytes of white space before its end: they count each time it is read, 1000, after 41 to open, 4 for the object and 1 for its length
+open 0
+4: raw 0
+err 0
+open 0
+4: raw none
+err -7
+open 0
+5: raw none
+err -7
+open 0
+5: raw 3
 # a cross reference stream with a predictor, and objects in an object stream
 open 0
 0: none

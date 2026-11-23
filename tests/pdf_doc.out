@@ -57,7 +57,7 @@ open -22
 open -22
 open -22
 open -22
-# the work: 16 for the section, 6 for its entries, 4 for the catalog
+# the work: 16 for the section, 6 for its entries, 7 each of the two times that the 113 bytes of the table are read, 4 for the catalog
 open -7
 open 0
 err 0
@@ -94,4 +94,16 @@ open 0
 err -7
 open 0
 6: none
+err 0
+# a table with 16000 bytes of white space in it: they count each of the two times, 1007 for the 16113 bytes
+open -7
+open 0
+err 0
+# null for a key is as no key: of Encrypt, and of a dictionary, also as what a reference to no object gives
+open 0
+5.A: none
+5.B: none
+5.C: (a string)
+5.D: none
+6 -> null
 err 0

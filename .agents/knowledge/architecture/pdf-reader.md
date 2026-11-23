@@ -125,6 +125,18 @@ rest, which is for the user to review (`status/open-items.md`).
   space before a few digits made a document spent: the bytes it gives are counted
   as they are added. The text of the 400 files read on that day did not change, and
   the most work a byte is still 5.5.
+- **What Copilot's sixth review found, fixed the same day** (2026-11-23). The bytes
+  of a table of cross references counted by its entries alone, so white space and
+  comments in it cost nothing: they count a unit for 16 each of the two times a
+  table is read, also when it is none, which made the cost of every file with a
+  table a little more (the hand-written file of the test opens for 554, not 418).
+  The same for what lies between the dictionary of a stream and `stream`, and
+  between the bytes a Length names and `endstream`. A value null for a key is as no
+  key (ISO 32000-1, 7.3.9), also the null that a reference to no object gives:
+  `pdfdocget` says so, and so `/Contents null` is a page of no text, `/Filter null`
+  no filter and `/Resources null` the resources of the node above; `/Encrypt null`
+  in a trailer is no encryption. The text of the 400 files did not change, and the
+  most work a byte is 5.5 as before.
 
 ## What was seen and is not done
 - No file of LaTeX, LibreOffice, Word or a browser was made for the tests: none of

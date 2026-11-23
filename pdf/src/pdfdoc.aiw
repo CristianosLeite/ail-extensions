@@ -245,9 +245,19 @@ end
 
 # Read the sections of a table that starts at pdfdoca, after its "xref":
 # the address of the trailer dictionary, or 0. With pdfdocdry nothing is
-# kept of the entries and no work is counted: the trailer is looked
-# for.
+# kept of the entries: the trailer is looked for. The bytes that were
+# looked at count as work each time, also white space and comments
+# and those of a table that is none.
 fn pdfdoctable pdfdocd pdfdoca pdfdocdry
+	call pdfdocsections pdfdocd pdfdoca pdfdocdry as pdfdocr pdfdocn
+	call pdfdocspend pdfdocd pdfdocn-pdfdoca>>4 as pdfdocw
+	ifz pdfdocw
+		ret 0
+	end
+	ret pdfdocr
+end
+# the same, and the address that was read to
+fn pdfdocsections pdfdocd pdfdoca pdfdocdry
 	load pdfdocd+8 as pdfdoce
 	label sub
 	call pdfobjskip pdfdoca pdfdoce as pdfdoca
@@ -255,9 +265,10 @@ fn pdfdoctable pdfdocd pdfdoca pdfdocdry
 	if pdfdock==pdfobjword
 		call pdfdocword pdfdoca pdfdocn "trailer" as pdfdocw
 		ifz pdfdocw
-			ret 0
+			ret 0 pdfdocn
 		end
-		tail pdfobjskip pdfdocn pdfdoce
+		call pdfobjskip pdfdocn pdfdoce as pdfdocn
+		ret pdfdocn pdfdocn
 	end
 	call pdfobjint pdfdoca pdfdoce as pdfdocfirst pdfdocw
 	call pdfobjskip pdfdocn pdfdoce as pdfdocb
@@ -266,16 +277,16 @@ fn pdfdoctable pdfdocd pdfdoca pdfdocdry
 	# an entry is six bytes at least, so a count that the bytes left
 	# cannot hold is none
 	if (pdfdocw==0)|(pdfdocx==0)|(pdfdocfirst>pdfdocmost)|(pdfdoccount>pdfdocmost)|(pdfdoccount*6>pdfdoce-pdfdocn)
-		ret 0
+		ret 0 pdfdocn
 	end
 	ifz pdfdocdry
 		call pdfdocroom pdfdocd pdfdocfirst+pdfdoccount as pdfdocw
 		ifz pdfdocw
-			ret 0
+			ret 0 pdfdocn
 		end
 		call pdfdocspend pdfdocd pdfdoccount+1 as pdfdocw
 		ifz pdfdocw
-			ret 0
+			ret 0 pdfdocn
 		end
 	end
 	pdfdoca=pdfdocn
@@ -290,7 +301,7 @@ fn pdfdoctable pdfdocd pdfdoca pdfdocdry
 		call pdfobjskip pdfdocn pdfdoce as pdfdocb
 		call pdfobjtok pdfdocb pdfdoce as pdfdocy pdfdocn
 		if (pdfdocw==0)|(pdfdocc==0)|(pdfdocy!=pdfobjword)|(pdfdocn!=pdfdocb+1)
-			ret 0
+			ret 0 pdfdocn
 		end
 		loadb pdfdocb as pdfdocc
 		ifz pdfdocdry
@@ -315,10 +326,15 @@ fn pdfdoctrailer pdfdocd pdfdoca
 	load pdfdocd+64 as pdfdoct
 	ifz pdfdoct
 		store pdfdocd+64 pdfdoca
+		# a value null is as no key
 		call pdfobjget pdfdoca pdfdoce "Encrypt" as pdfdocv
 		if pdfdocv
-			call pdfdocfail pdfdocd pdfdoclocked
-			ret 0
+			call pdfobjtok pdfdocv pdfdoce as pdfdock pdfdocn
+			call pdfdocword pdfdocv pdfdocn "null" as pdfdocw
+			ifz pdfdocw
+				call pdfdocfail pdfdocd pdfdoclocked
+				ret 0
+			end
 		end
 		call pdfobjget pdfdoca pdfdoce "Root" as pdfdocv
 		if pdfdocv
@@ -766,7 +782,8 @@ end
 
 # The value that the dictionary at pdfdoca has for the key of the pdfdockn bytes
 # at pdfdockp, or the one that value refers to: its address and the one
-# after its bytes, or 0 and 0 if the dictionary has no such key.
+# after its bytes, or 0 and 0 if the dictionary has no such key, or
+# has null for it.
 fn pdfdocget pdfdocd pdfdoca pdfdoce pdfdockp pdfdockn
 	call pdfobjget pdfdoca pdfdoce pdfdockp pdfdockn as pdfdocv
 	if pdfdocv
@@ -774,7 +791,15 @@ fn pdfdocget pdfdocd pdfdoca pdfdoce pdfdockp pdfdockn
 		ifz pdfdocw
 			ret 0 0
 		end
-		tail pdfdocderef pdfdocd pdfdocv pdfdoce
+		# a value null, also the one of a reference to no object, is as
+		# no key (7.3.9)
+		call pdfdocderef pdfdocd pdfdocv pdfdoce as pdfdocv pdfdoce
+		call pdfobjtok pdfdocv pdfdoce as pdfdock pdfdocn
+		call pdfdocword pdfdocv pdfdocn "null" as pdfdocw
+		if pdfdocw
+			ret 0 0
+		end
+		ret pdfdocv pdfdoce
 	end
 	# what was looked at for nothing: the dictionary, or all the bytes
 	# if it does not end

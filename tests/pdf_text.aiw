@@ -239,13 +239,13 @@ call file "tests/data/cairo.pdf"
 call page 1
 call page 2
 call pdfclose d
-call print "# the work a document may cost: this file takes 418 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so\n"
-call cost "tests/data/hand.pdf" 417 1000000
-call cost "tests/data/hand.pdf" 418 1000000
+call print "# the work a document may cost: this file takes 554 to open and 410 for its first page, as a run with more showed; with less the document is spent, and stays so\n"
+call cost "tests/data/hand.pdf" 553 1000000
+call cost "tests/data/hand.pdf" 554 1000000
 call page 1
 call page 8
 call pdfclose d
-call cost "tests/data/hand.pdf" 828 1000000
+call cost "tests/data/hand.pdf" 964 1000000
 call page 1
 call page 8
 call page 1
@@ -281,11 +281,13 @@ call pdfclose d
 call cost "tests/data/text.pdf" 10000000 1000000
 call count 1
 call pdfclose d
-call print "# contents that are an array: one that a string without its end cuts short and one that the bytes end in are no contents, though a stream before could be read; between them a page of two streams\n"
+call print "# contents that are an array: one that a string without its end cuts short and one that the bytes end in are no contents, though a stream before could be read; between them a page of two streams; then contents that are null, which is a page of no text, and null for the resources of a page and for the filter of its stream, which are as not there\n"
 call file "tests/data/contents.pdf"
 call page 1
 call page 2
 call page 3
+call page 4
+call page 5
 call pdfclose d
 call print "# each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds\n"
 call clock

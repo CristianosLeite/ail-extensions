@@ -69,10 +69,13 @@ fn pdfstmraw pdfstmd pdfstma pdfstme
 	ifz pdfstmm
 		ret 0 0
 	end
+	# what lies between the parts of a stream is looked at each time
+	# it is read, and counts
 	call pdfobjskip pdfstmm pdfstme as pdfstmb
 	call pdfobjtok pdfstmb pdfstme as pdfstmk pdfstmn
 	call pdfdocword pdfstmb pdfstmn "stream" as pdfstmw
-	ifz pdfstmw
+	call pdfdocspend pdfstmd pdfstmb-pdfstmm>>4 as pdfstmx
+	if (pdfstmw==0)|(pdfstmx==0)
 		ret 0 0
 	end
 	# the end of the line after the word is no byte of the stream
@@ -95,6 +98,10 @@ fn pdfstmraw pdfstmd pdfstma pdfstme
 			call pdfobjskip pdfstmn+pdfstml pdfstme as pdfstmb
 			call pdfobjtok pdfstmb pdfstme as pdfstmk pdfstmm
 			call pdfdocword pdfstmb pdfstmm "endstream" as pdfstmw
+			call pdfdocspend pdfstmd pdfstmb-pdfstmn-pdfstml>>4 as pdfstmx
+			ifz pdfstmx
+				ret 0 0
+			end
 			if pdfstmw
 				ret pdfstmn pdfstml
 			end
