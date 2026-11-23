@@ -278,16 +278,22 @@ fn pdffontutf8 pdffontb pdffontcp
 	if pdffontcp<0x80
 		tail byaddb pdffontb pdffontcp
 	end
+	# room for the most bytes first, so that the character is added
+	# whole or not at all
+	call byneed pdffontb 4 as pdffontw
+	ifz pdffontw
+		ret 0
+	end
 	if pdffontcp<0x800
-		call byaddb pdffontb 0xc0|(pdffontcp>>6) as pdffontw
+		call byaddb pdffontb 0xc0|(pdffontcp>>6)
 	else
 		if pdffontcp<0x10000
-			call byaddb pdffontb 0xe0|(pdffontcp>>12) as pdffontw
+			call byaddb pdffontb 0xe0|(pdffontcp>>12)
 		else
-			call byaddb pdffontb 0xf0|(pdffontcp>>18) as pdffontw
-			call byaddb pdffontb 0x80|(pdffontcp>>12&63) as pdffontw
+			call byaddb pdffontb 0xf0|(pdffontcp>>18)
+			call byaddb pdffontb 0x80|(pdffontcp>>12&63)
 		end
-		call byaddb pdffontb 0x80|(pdffontcp>>6&63) as pdffontw
+		call byaddb pdffontb 0x80|(pdffontcp>>6&63)
 	end
 	tail byaddb pdffontb 0x80|(pdffontcp&63)
 end

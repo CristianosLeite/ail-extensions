@@ -137,6 +137,16 @@ rest, which is for the user to review (`status/open-items.md`).
   no filter and `/Resources null` the resources of the node above; `/Encrypt null`
   in a trailer is no encryption. The text of the 400 files did not change, and the
   most work a byte is 5.5 as before.
+- **What Copilot's seventh review found, fixed the same day** (2026-11-23). The
+  four bytes of a group of `ASCII85Decode`, and the bytes of a character in UTF-8
+  (`pdffontutf8`), were added one by one and the last result alone was looked at,
+  so a first byte that found no memory and a later one that found it would have
+  left a part with a result of success. The room for the four is asked first
+  (`byneed`), after which none of them can fail: a group or a character is added
+  whole or not at all. No test tells the two apart: in a program of one thread the
+  request that failed is made again with the same size and fails again, so the
+  last result said it. What the 400 files print, the work left with it, did not
+  change.
 
 ## What was seen and is not done
 - No file of LaTeX, LibreOffice, Word or a browser was made for the tests: none of

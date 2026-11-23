@@ -222,11 +222,13 @@ fn pdfstma85 pdfstmp pdfstmn pdfstmb pdfstmmax
 			if pdfstmv>0xffffffff
 				ret pdfstmbad
 			end
-			call byaddb pdfstmb pdfstmv>>24 as pdfstmw
-			call byaddb pdfstmb pdfstmv>>16&255 as pdfstmw
-			call byaddb pdfstmb pdfstmv>>8&255 as pdfstmw
-			call byaddb pdfstmb pdfstmv&255 as pdfstmw
+			# room for the four first, so that none of them fails
+			call byneed pdfstmb 4 as pdfstmw
 			jz pdfstmw nomem
+			call byaddb pdfstmb pdfstmv>>24
+			call byaddb pdfstmb pdfstmv>>16&255
+			call byaddb pdfstmb pdfstmv>>8&255
+			call byaddb pdfstmb pdfstmv&255
 			pdfstmv=0
 			pdfstmk=0
 		end
