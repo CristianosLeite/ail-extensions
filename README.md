@@ -9,6 +9,8 @@ Extensions for [AIL](https://github.com/CristianosLeite/ail), a programming lang
 
 - [`mcp/`](mcp/README.md): a Model Context Protocol server in AIL, tools over the stdio transport, for a program that is to be asked by a coding agent; a program reads it as `ail-extensions:mcp/src/mcp.aiw`
 
+- [`pdf/`](pdf/README.md): the text of the pages of a PDF file, for a program that is to search or to index documents: cross references as tables and streams, object streams, `FlateDecode`, fonts with their encodings and `ToUnicode`, and a limit on the work and the memory a file may cost; a program reads it as `ail-extensions:pdf/src/pdf.aiw`. It has a decoder of DEFLATE and zlib, `pdf/src/inflate.aiw`, that is of use by itself
+
 ## Checks
 
 ```
@@ -25,6 +27,7 @@ The check of the editors compares an extension with the language itself, so it r
 
 - `editors/vscode/`: the extension (`package.json`, `extension.js`, the grammar in `syntaxes/`, `language-configuration.json`), `check.sh` and `test/check.js`
 - `mcp/`: the MCP server SDK, `src/mcp.aiw`, with its tests in `tests/` (`mcp_serve.aiw`, a session it is to print, and `mcp_no_memory.aiw`); they need an AIL that has `lib/std/json.aiw`
+- `pdf/`: the reader of PDF, six sources in `src/`, with its tests in `tests/` (`pdf_*.aiw`) and the files they read in `tests/data/`
 - `Ailfile`: the manifest of the package; `tests/`: the tests that `ail test` runs
 - `tools/check.sh`: the sources of AIL for `make check`
 - `AGENTS.md`, `.agents/knowledge/`: guidance and notes for AI coding agents

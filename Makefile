@@ -6,8 +6,9 @@
 AIL ?= ail
 AILCMD := $(if $(findstring /,$(AIL)),$(abspath $(AIL)),$(AIL))
 
-# The tests of mcp/, the MCP server SDK (tests/mcp_*.aiw), and the
-# indentation of every AIL source.
+# The tests of mcp/, the MCP server SDK (tests/mcp_*.aiw), and of pdf/,
+# the reader of PDF (tests/pdf_*.aiw), and the indentation of every AIL
+# source.
 test:
 	$(AIL) test $(T)
 	$(AIL) fmt --check
