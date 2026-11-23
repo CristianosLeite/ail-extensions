@@ -946,10 +946,15 @@ fn pdfpage pdfd pdfi pdfout
 	if pdfk==pdfobjarr
 		# several streams are one, with white space between them
 		call pdfobjfirst pdfv pdfve as pdfq
+		# an array that does not end, or with what is no value in it, is
+		# no contents: the streams before are not the page
 		label each
-		jz pdfq read
+		jz pdfq broken
 		call pdfobjtok pdfq pdfve as pdfk pdfm
-		if (pdfk!=pdfobjarrend)&(pdfk!=pdfobjend)&(pdfk!=pdfobjbad)
+		if (pdfk==pdfobjend)|(pdfk==pdfobjbad)
+			jmp broken
+		end
+		if pdfk!=pdfobjarrend
 			call pdfdocderef pdfd pdfq pdfve as pdfx pdfxe
 			call pdfstmdata pdfd pdfx pdfxe pdfc as pdfr
 			jnz pdfr done
@@ -974,10 +979,12 @@ fn pdfpage pdfd pdfi pdfout
 	call pdfdochold pdfd pdfx-pdfheld as pdfw
 	jz pdfw done
 	pdfheld=pdfx
-	label read
 	load pdfc as pdfp
 	load pdfc+8 as pdfn
 	call pdfrun pdfd pdfst pdfp pdfp+pdfn pdfra pdfre as pdfr
+	jmp done
+	label broken
+	pdfr=pdfbad
 	label done
 	call byfree pdfc
 	call pdfdocdrop pdfd pdfheld

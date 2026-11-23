@@ -109,6 +109,22 @@ rest, which is for the user to review (`status/open-items.md`).
   byte before the buffer when the page had no text yet. Half a surrogate pair and a
   value above U+10FFFF are written as U+FFFD, so that the text is UTF-8. No memory for
   a space or a line feed that the reader puts in is the error of the document.
+- **What Copilot's fifth review found, fixed the same day** (2026-11-23). An object
+  has its generation, which was not looked at: after an update that gives the number
+  of a freed object to a new one, `5 0 R` found the new `5 1 obj`, and its text could
+  come out as that of another page. The entry keeps the generation, the two numbers
+  before `obj` are to give it too, an object of an object stream has 0, and a
+  reference with another generation is null (`pdfdocref`; poppler does the same).
+  `pdfdocobj`, by the number alone, stays for what is found by no reference. The
+  bytes before the value of an object, white space and comments, were looked at for
+  the four units of the object each time a font was set: they count as the rest, a
+  unit for 16, also where no object is, and so do the pairs of an object stream that
+  are passed to reach one. An array of contents that a string without its end or
+  the end of the bytes cut short gave the text of the streams before: it is
+  `pdfbad`. `ASCIIHexDecode` was held to half the bytes it reads, so much white
+  space before a few digits made a document spent: the bytes it gives are counted
+  as they are added. The text of the 400 files read on that day did not change, and
+  the most work a byte is still 5.5.
 
 ## What was seen and is not done
 - No file of LaTeX, LibreOffice, Word or a browser was made for the tests: none of

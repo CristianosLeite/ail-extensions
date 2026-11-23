@@ -74,3 +74,24 @@ open -7
 open 0
 1: <</Type /Catalog /Pages 2 0 R>>
 err 0
+# a number given to a new object by a later section: a reference with the old generation is to no object, one with the new to the object; an object whose own generation is not that of its entry; a catalog of another generation
+open 0
+3: (new)
+4 -> null
+5 -> (new)
+6: none
+err 0
+open -22
+# the bytes before the value of an object count as work, 16000 of them 1000, also where no object is
+open 0
+5: (far)
+err 0
+open 0
+5: none
+err -7
+open 0
+6: none
+err -7
+open 0
+6: none
+err 0

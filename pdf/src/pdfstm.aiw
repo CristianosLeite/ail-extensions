@@ -127,8 +127,10 @@ fn pdfstmraw pdfstmd pdfstma pdfstme
 end
 
 # add the bytes that the pdfstmn bytes at pdfstmp write in hexadecimal, up to a
-# ">": 0, or an error
-fn pdfstmhex pdfstmp pdfstmn pdfstmb
+# ">", pdfstmmax at most: 0, or an error
+fn pdfstmhex pdfstmp pdfstmn pdfstmb pdfstmmax
+	load pdfstmb+8 as pdfstmw
+	pdfstmmax+=pdfstmw
 	pdfstmv=0-1
 	pdfstmi=0
 	label more
@@ -141,6 +143,10 @@ fn pdfstmhex pdfstmp pdfstmn pdfstmb
 				ifslt pdfstmv 0
 					pdfstmv=pdfstmx
 				else
+					load pdfstmb+8 as pdfstmw
+					if pdfstmw>=pdfstmmax
+						ret pdfdocspent
+					end
 					call byaddb pdfstmb pdfstmv*16+pdfstmx as pdfstmw
 					jz pdfstmw nomem
 					pdfstmv=0-1
@@ -153,6 +159,10 @@ fn pdfstmhex pdfstmp pdfstmn pdfstmb
 		end
 	end
 	ifsge pdfstmv 0
+		load pdfstmb+8 as pdfstmw
+		if pdfstmw>=pdfstmmax
+			ret pdfdocspent
+		end
 		call byaddb pdfstmb pdfstmv*16 as pdfstmw
 		jz pdfstmw nomem
 	end
@@ -491,12 +501,8 @@ fn pdfstmdata pdfstmd pdfstma pdfstme pdfstmout
 	call pdfobjis pdfstmv pdfstmm "ASCIIHexDecode" as pdfstmx
 	call pdfobjis pdfstmv pdfstmm "AHx" as pdfstmy
 	if pdfstmx|pdfstmy
-		# two digits a byte: not more than the memory left
 		load pdfstmd+40 as pdfstmmax
-		pdfstmr=pdfdocspent
-		if pdfstmn>>1<=pdfstmmax
-			call pdfstmhex pdfstmp pdfstmn pdfstmt as pdfstmr
-		end
+		call pdfstmhex pdfstmp pdfstmn pdfstmt pdfstmmax as pdfstmr
 	end
 	call pdfobjis pdfstmv pdfstmm "ASCII85Decode" as pdfstmx
 	call pdfobjis pdfstmv pdfstmm "A85" as pdfstmy

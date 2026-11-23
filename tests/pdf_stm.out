@@ -72,6 +72,10 @@ open 0
 open 0
 5: 0 400000
 6: 0 200000
+# hexadecimal with 200000 bytes of white space before its one byte, with memory for 50000
+open 0
+4: 0 <A
+err 0
 # a cross reference stream with a predictor, and objects in an object stream
 open 0
 0: none
@@ -105,6 +109,14 @@ open 0
 14: none
 15: none
 2: <</Type /Pages /Kids [] /Count 0>>
+err 0
+# generations in a cross reference stream: a reference with another generation is to no object, and an object of an object stream has the generation 0
+open 0
+3: (new)
+4 -> null
+7 -> (new)
+8 -> <</Type /Pages /Kids [] /Count 0>>
+9 -> null
 err 0
 # the bytes of an object stream count as memory: the catalog is in one
 open -7

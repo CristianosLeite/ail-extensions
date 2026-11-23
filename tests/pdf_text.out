@@ -112,6 +112,12 @@ open 1
 page 1: -7, room within 28096
 open 1
 page 1: 16639
+# contents that are an array: one that a string without its end cuts short and one that the bytes end in are no contents, though a stream before could be read; between them a page of two streams
+pages 3
+page 1: -5 []
+page 2: 7 [one
+two]
+page 3: -5 []
 # each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds
 hand.pdf: 1258 files read
 gs.pdf: 1725 files read

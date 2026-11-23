@@ -281,6 +281,12 @@ call pdfclose d
 call cost "tests/data/text.pdf" 10000000 1000000
 call count 1
 call pdfclose d
+call print "# contents that are an array: one that a string without its end cuts short and one that the bytes end in are no contents, though a stream before could be read; between them a page of two streams\n"
+call file "tests/data/contents.pdf"
+call page 1
+call page 2
+call page 3
+call pdfclose d
 call print "# each file cut at every eleventh length, and with every 53rd byte changed three ways: no fault, and all within 9 seconds\n"
 call clock
 call harm "tests/data/hand.pdf"

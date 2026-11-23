@@ -56,6 +56,7 @@ call pdfclose d
 ## What is read
 
 - The cross references as a table or as a stream, with the sections of later changes, and objects in object streams (PDF 1.5).
+- The generation of an object: a reference with another generation than the object has is to no object, as after a change that gave the number of a freed object to a new one.
 - Streams that are not packed or packed with `FlateDecode`, with the predictors of PNG and of TIFF, `ASCIIHexDecode` and `ASCII85Decode`.
 - The pages in the order of the page tree, with the resources a page inherits.
 - The operators that show and place text (`BT ET Tf Td TD Tm T* TL Tc Tw Tz Tj TJ ' "`), `q Q cm`, forms drawn with `Do`, twelve deep; an inline image is passed over.

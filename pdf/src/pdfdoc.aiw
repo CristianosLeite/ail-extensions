@@ -4,6 +4,7 @@
 #
 #   pdfdocopen p n d work mem   read the cross references of the n bytes at p
 #   pdfdocobj d num             the value of the object with that number
+#   pdfdocref d num gen         the same, of that generation alone
 #   pdfdocderef d a e           the value at a, or the one it refers to
 #   pdfdocget d a e kp kn       the value of a key of the dictionary at a
 #   pdfdocclose d               give back what was allocated
@@ -40,6 +41,12 @@
 # object may lie in an object stream (7.5.7), which is unpacked when
 # the first object of it is asked for and kept until pdfdocclose.
 #
+# An object has a generation beside its number (7.3.10): the one that
+# its entry says, which the two numbers before its "obj" are to give
+# too, and 0 for an object of an object stream. A reference to the
+# number with another generation is to no object, as when an update of
+# the file gave the number of an object that was freed to a new one.
+#
 # What is tolerated: bytes before the header, sections that refer to
 # one another in a circle (each is read once), an entry that points to
 # no object (the object is then none), an object stream that cannot be
@@ -69,8 +76,9 @@ const pdfdocsize 128
 # an entry of the table is 16 bytes: its kind in the low byte, and the
 # offset of the object in the file or, for one in an object stream, the
 # number of the stream shifted left by 32 and its place in it. Above
-# the kind of an object stream is its place among those unpacked, from
-# 1, or pdfdocfailed.
+# the kind of an object stream, in 24 bits, is its place among those
+# unpacked, from 1, or pdfdocfailed, and above that, from the bit 32, the
+# generation of the object.
 const pdfdocfailed 0xffffff
 const pdfdocnone 0
 const pdfdocinfile 1
@@ -223,13 +231,14 @@ fn pdfdocroom pdfdocd pdfdocn
 	ret 1
 end
 
-# set the entry of the object pdfdocnum, if a newer section has not set it
-fn pdfdocset pdfdocd pdfdocnum pdfdockind pdfdocv
+# set the entry of the object pdfdocnum, of the generation pdfdocg, if a newer
+# section has not set it
+fn pdfdocset pdfdocd pdfdocnum pdfdockind pdfdocv pdfdocg
 	load pdfdocd+16 as pdfdoct
 	pdfdoct+=pdfdocnum*16
 	load pdfdoct as pdfdock
 	ifz pdfdock
-		store pdfdoct pdfdockind
+		store pdfdoct pdfdockind|((pdfdocg&0xffffffff)<<32)
 		store pdfdoct+8 pdfdocv
 	end
 end
@@ -276,18 +285,19 @@ fn pdfdoctable pdfdocd pdfdoca pdfdocdry
 		call pdfobjint pdfdoca pdfdoce as pdfdocoff pdfdocw
 		call pdfobjtok pdfdoca pdfdoce as pdfdock pdfdocn
 		call pdfobjskip pdfdocn pdfdoce as pdfdocb
+		call pdfobjint pdfdocb pdfdoce as pdfdocg pdfdocc
 		call pdfobjtok pdfdocb pdfdoce as pdfdocx pdfdocn
 		call pdfobjskip pdfdocn pdfdoce as pdfdocb
 		call pdfobjtok pdfdocb pdfdoce as pdfdocy pdfdocn
-		if (pdfdocw==0)|(pdfdocx!=pdfobjint)|(pdfdocy!=pdfobjword)|(pdfdocn!=pdfdocb+1)
+		if (pdfdocw==0)|(pdfdocc==0)|(pdfdocy!=pdfobjword)|(pdfdocn!=pdfdocb+1)
 			ret 0
 		end
 		loadb pdfdocb as pdfdocc
 		ifz pdfdocdry
 			if (pdfdocc==110)&(pdfdocoff>0)
-				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocinfile pdfdocoff
+				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocinfile pdfdocoff pdfdocg
 			else
-				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocfree 0
+				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocfree 0 0
 			end
 		end
 		pdfdoca=pdfdocn
@@ -315,6 +325,7 @@ fn pdfdoctrailer pdfdocd pdfdoca
 			call pdfobjref pdfdocv pdfdoce as pdfdocw pdfdocx pdfdocy
 			if pdfdocw
 				store pdfdocd+56 pdfdocx
+				store pdfdocd+104 pdfdocy
 			end
 		end
 	end
@@ -327,22 +338,26 @@ fn pdfdoctrailer pdfdocd pdfdoca
 end
 
 # the address of the value of the object that starts at pdfdoca, after its
-# two numbers and "obj", and its number; 0 and 0 if no object starts
-# there
-fn pdfdochead pdfdoca pdfdoce
+# two numbers and "obj", its number and its generation; 0, 0 and 0 if
+# no object starts there, or if no work is left for the bytes that
+# were looked at, which count whether an object is there or not
+fn pdfdochead pdfdocd pdfdoca pdfdoce
+	pdfdocs=pdfdoca
 	call pdfobjskip pdfdoca pdfdoce as pdfdoca
 	call pdfobjint pdfdoca pdfdoce as pdfdocx pdfdocw
 	call pdfobjtok pdfdoca pdfdoce as pdfdock pdfdocn
 	call pdfobjskip pdfdocn pdfdoce as pdfdoca
-	call pdfobjtok pdfdoca pdfdoce as pdfdock pdfdocn
+	call pdfobjint pdfdoca pdfdoce as pdfdocg pdfdock
+	call pdfobjtok pdfdoca pdfdoce as pdfdocy pdfdocn
 	call pdfobjskip pdfdocn pdfdoce as pdfdoca
 	call pdfobjtok pdfdoca pdfdoce as pdfdocy pdfdocn
 	call pdfdocword pdfdoca pdfdocn "obj" as pdfdocc
-	if (pdfdocw==0)|(pdfdock!=pdfobjint)|(pdfdocc==0)
-		ret 0 0
-	end
 	call pdfobjskip pdfdocn pdfdoce as pdfdoca
-	ret pdfdoca pdfdocx
+	call pdfdocspend pdfdocd pdfdoca-pdfdocs>>4 as pdfdocy
+	if (pdfdocw==0)|(pdfdock==0)|(pdfdocc==0)|(pdfdocy==0)
+		ret 0 0 0
+	end
+	ret pdfdoca pdfdocx pdfdocg
 end
 
 # the pdfdock bytes at pdfdocq as a number, the first byte highest
@@ -427,17 +442,17 @@ fn pdfdocxstream pdfdocd pdfdoca
 		call pdfdocbe pdfdocq+pdfdocw1 pdfdocw2 as pdfdocx
 		call pdfdocbe pdfdocq+pdfdocw1+pdfdocw2 pdfdocw3 as pdfdocy
 		ifz pdfdock
-			call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocfree 0
+			call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocfree 0 0
 		end
 		if pdfdock==1
 			if pdfdocx
-				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocinfile pdfdocx
+				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocinfile pdfdocx pdfdocy
 			else
-				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocfree 0
+				call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocfree 0 0
 			end
 		end
 		if (pdfdock==2)&(pdfdocx<pdfdocmost)&(pdfdocy<=0xffffffff)
-			call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocinstream pdfdocx<<32|pdfdocy
+			call pdfdocset pdfdocd pdfdocfirst+pdfdoci pdfdocinstream pdfdocx<<32|pdfdocy 0
 		end
 		pdfdocq+=pdfdocw
 		pdfdoci+=1
@@ -519,7 +534,7 @@ fn pdfdocopen pdfdocp pdfdocn pdfdocd pdfdocwork pdfdoccap
 		if pdfdocv
 			call pdfobjint pdfdocv pdfdoce as pdfdocx pdfdocw
 			if pdfdocw&(pdfdocx<pdfdocn)
-				call pdfdochead pdfdocp+pdfdocx pdfdoce as pdfdocv pdfdocx
+				call pdfdochead pdfdocd pdfdocp+pdfdocx pdfdoce as pdfdocv pdfdocx pdfdocy
 				if pdfdocv
 					call pdfdocxstream pdfdocd pdfdocv
 				end
@@ -529,7 +544,7 @@ fn pdfdocopen pdfdocp pdfdocn pdfdocd pdfdocwork pdfdoccap
 		jz pdfdoca bad
 	else
 		# a cross reference stream, which is an object
-		call pdfdochead pdfdoca pdfdoce as pdfdoca pdfdocx
+		call pdfdochead pdfdocd pdfdoca pdfdoce as pdfdoca pdfdocx pdfdocy
 		jz pdfdoca bad
 		call pdfobjtok pdfdoca pdfdoce as pdfdock pdfdocm
 		jne pdfdock pdfobjdict bad
@@ -544,7 +559,8 @@ fn pdfdocopen pdfdocp pdfdocn pdfdocd pdfdocwork pdfdoccap
 	jnz pdfdocr close
 	# the catalog is a dictionary
 	load pdfdocd+56 as pdfdocx
-	call pdfdocobj pdfdocd pdfdocx as pdfdoca pdfdocm
+	load pdfdocd+104 as pdfdocy
+	call pdfdocref pdfdocd pdfdocx pdfdocy as pdfdoca pdfdocm
 	jz pdfdoca bad2
 	call pdfobjtok pdfdoca pdfdocm as pdfdock pdfdocm
 	jne pdfdock pdfobjdict bad2
@@ -563,10 +579,26 @@ fn pdfdocopen pdfdocp pdfdocn pdfdocd pdfdocwork pdfdoccap
 	ret pdfdocr
 end
 
-# The value of the object with the number pdfdocnum: the address of its
-# first byte and the one after the bytes it lies in; 0 and 0 if the
-# document has no such object, or if what the table points to is not
-# that object.
+# The value of the object pdfdocnum if its generation is pdfdocg, as pdfdocobj gives
+# it; 0 and 0 if the object has another generation.
+fn pdfdocref pdfdocd pdfdocnum pdfdocg
+	load pdfdocd+24 as pdfdocs
+	if pdfdocnum>=pdfdocs
+		ret 0 0
+	end
+	load pdfdocd+16 as pdfdoct
+	pdfdoct+=pdfdocnum*16
+	load pdfdoct as pdfdock
+	if pdfdock>>32!=pdfdocg
+		ret 0 0
+	end
+	tail pdfdocobj pdfdocd pdfdocnum
+end
+
+# The value of the object with the number pdfdocnum, whatever its generation:
+# the address of its first byte and the one after the bytes it lies
+# in; 0 and 0 if the document has no such object, or if what the table
+# points to is not that object of the generation of the table.
 fn pdfdocobj pdfdocd pdfdocnum
 	load pdfdocd+24 as pdfdocs
 	if pdfdocnum>=pdfdocs
@@ -586,8 +618,8 @@ fn pdfdocobj pdfdocd pdfdocnum
 		if pdfdocv>=pdfdoce-pdfdocp
 			ret 0 0
 		end
-		call pdfdochead pdfdocp+pdfdocv pdfdoce as pdfdoca pdfdocx
-		if (pdfdoca==0)|(pdfdocx!=pdfdocnum)
+		call pdfdochead pdfdocd pdfdocp+pdfdocv pdfdoce as pdfdoca pdfdocx pdfdocy
+		if (pdfdoca==0)|(pdfdocx!=pdfdocnum)|(pdfdocy!=pdfdock>>32)
 			ret 0 0
 		end
 		ret pdfdoca pdfdoce
@@ -612,7 +644,7 @@ fn pdfdocpacked pdfdocd pdfdocnum pdfdocsn pdfdocidx
 	if pdfdock&255!=pdfdocinfile
 		ret 0 0
 	end
-	pdfdocslot=pdfdock>>8
+	pdfdocslot=(pdfdock>>8)&0xffffff
 	if pdfdocslot==pdfdocfailed
 		ret 0 0
 	end
@@ -635,7 +667,7 @@ fn pdfdocpacked pdfdocd pdfdocnum pdfdocsn pdfdocidx
 		end
 		pdfdocr=1
 		if pdfdocv<pdfdoce-pdfdocp
-			call pdfdochead pdfdocp+pdfdocv pdfdoce as pdfdoca pdfdocx
+			call pdfdochead pdfdocd pdfdocp+pdfdocv pdfdoce as pdfdoca pdfdocx pdfdocy
 			if pdfdoca
 				call pdfstmdata pdfdocd pdfdoca pdfdoce pdfdocb as pdfdocr
 				ifz pdfdocr
@@ -683,10 +715,6 @@ fn pdfdocpacked pdfdocd pdfdocnum pdfdocsn pdfdocidx
 	if (pdfdocidx>=pdfdocx)|(pdfdocy>pdfdocn)
 		ret 0 0
 	end
-	call pdfdocspend pdfdocd pdfdocidx+1 as pdfdocw
-	ifz pdfdocw
-		ret 0 0
-	end
 	# the pairs before the objects: a number and where its object
 	# starts, counted from the first
 	pdfdoce=pdfdoca+pdfdocy
@@ -699,13 +727,15 @@ fn pdfdocpacked pdfdocd pdfdocnum pdfdocsn pdfdocidx
 	call pdfobjskip pdfdocm pdfdoce as pdfdocp
 	call pdfobjint pdfdocp pdfdoce as pdfdocv pdfdocc
 	call pdfobjtok pdfdocp pdfdoce as pdfdock pdfdocm
-	if (pdfdocw==0)|(pdfdocc==0)
-		ret 0 0
-	end
-	if pdfdoci<pdfdocidx
+	if (pdfdocw!=0)&(pdfdocc!=0)&(pdfdoci<pdfdocidx)
 		pdfdocp=pdfdocm
 		pdfdoci+=1
 		jmp pair
+	end
+	# what was looked at counts, whether the pair is there or not
+	call pdfdocspend pdfdocd (pdfdocm-pdfdoca>>4)+pdfdocidx+1 as pdfdocs
+	if (pdfdocw==0)|(pdfdocc==0)|(pdfdocs==0)
+		ret 0 0
 	end
 	if (pdfdocx!=pdfdocnum)|(pdfdocv>pdfdocn-pdfdocy)
 		ret 0 0
@@ -717,8 +747,8 @@ end
 
 # The value at pdfdoca if it is no reference, and else the value of the
 # object it refers to, and so on: its address and the one after its
-# bytes. A reference to no object, or one after 32 others, is the
-# value null.
+# bytes. A reference to no object, to an object of another generation,
+# or one after 32 others, is the value null.
 fn pdfdocderef pdfdocd pdfdoca pdfdoce
 	pdfdoci=0
 	label more
@@ -728,7 +758,7 @@ fn pdfdocderef pdfdocd pdfdoca pdfdoce
 	end
 	pdfdoci+=1
 	if pdfdoci<=32
-		call pdfdocobj pdfdocd pdfdocx as pdfdoca pdfdoce
+		call pdfdocref pdfdocd pdfdocx pdfdocy as pdfdoca pdfdoce
 		jnz pdfdoca more
 	end
 	ret pdfdocnull pdfdocnull+4
