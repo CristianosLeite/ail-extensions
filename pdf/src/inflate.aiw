@@ -1,0 +1,486 @@
+# pdf/src/inflate.aiw -- the bytes that DEFLATE packed (RFC 1951), and
+# the same in the wrapping of zlib (RFC 1950), added to a buffer of
+# lib/std/bytes.aiw. A program that uses it uses lib/std/bytes.aiw first.
+#
+#   inflate p n b max       the n bytes at p are DEFLATE data
+#   inflatezlib p n b max   the n bytes at p are a stream of zlib
+#
+# Both add what the data unpacks to at the end of the buffer b, max
+# bytes at most, and read nothing outside the n bytes. inflate returns
+# the number of bytes of the data that it read, up to the end of the
+# last block, so that the caller sees what follows; inflatezlib returns
+# the number of bytes added, after it has compared their Adler-32 with
+# the one of the stream. A negative result is a failure, and then the
+# buffer has the bytes it had at the call and no other:
+#
+#   inflatebad   -22   the bytes are not such data: a block of a kind
+#                      that does not exist, a code that is no code, code
+#                      lengths that no code can have, a distance to
+#                      before the first byte, data that ends before its
+#                      last block does, a header of zlib that is none or
+#                      asks for a dictionary, a sum that differs
+#   inflatebig   -27   the data unpacks to more than max bytes
+#   inflatemem   -12   the kernel has no memory
+#
+# A code that leaves some bit strings without a meaning is taken, as
+# the one distance code of a single length is; a string that has none
+# is inflatebad where the data has it. Bytes after the end of the data
+# are not looked at.
+#
+# The function works on its own frame, about 132 KiB of it, and on the
+# buffer: it may be called from several threads at once, each with a
+# buffer of its own.
+#
+# Every name of this file starts with "inflate"; a program has no var
+# of such a name (see lib/std/io.aiw).
+const inflatebad -22
+const inflatebig -27
+const inflatemem -12
+
+# the first length and the first distance that a symbol stands for, two
+# bytes each, and the number of bits that follow the symbol
+data inflatelbase 3 0 4 0 5 0 6 0 7 0 8 0 9 0 10 0 11 0 13 0 15 0 17 0 19 0 23 0 27 0 31 0 35 0 43 0 51 0 59 0 67 0 83 0 99 0 115 0 131 0 163 0 195 0 227 0 2 1
+data inflatelext 0 0 0 0 0 0 0 0 1 1 1 1 2 2 2 2 3 3 3 3 4 4 4 4 5 5 5 5 0
+data inflatedbase 1 0 2 0 3 0 4 0 5 0 7 0 9 0 13 0 17 0 25 0 33 0 49 0 65 0 97 0 129 0 193 0 1 1 129 1 1 2 1 3 1 4 1 6 1 8 1 12 1 16 1 24 1 32 1 48 1 64 1 96
+data inflatedext 0 0 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13
+# the order in which the lengths of the code length code come
+data inflateorder 16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15
+
+# Make the table at inflatet for the code whose inflaten symbols have the lengths at
+# inflatel, a byte each, 0 for a symbol that is not used: for every string of
+# inflatetb bits as the data has them, the first bit lowest, two bytes with
+# the symbol that the string starts with, shifted left by 4, and the
+# length of its code; 0 where no code starts the string. inflatetb is not
+# below the longest length. The result is 0, or inflatebad if the lengths are
+# more than a code can have.
+fn inflatetable inflatel inflaten inflatet inflatetb
+	local inflatecount 128
+	local inflatenext 128
+	inflatei=0
+	while inflatei<128
+		store inflatecount+inflatei 0
+		inflatei+=8
+	end
+	inflatei=0
+	while inflatei<inflaten
+		loadb inflatel+inflatei as inflatec
+		if inflatec>inflatetb
+			ret inflatebad
+		end
+		load inflatecount+inflatec*8 as inflatek
+		store inflatecount+inflatec*8 inflatek+1
+		inflatei+=1
+	end
+	store inflatecount 0
+	# the codes of a length are numbered from where those of the length
+	# before end, with one more bit
+	inflateleft=1
+	inflatecode=0
+	inflatei=1
+	while inflatei<16
+		inflateleft*=2
+		load inflatecount+inflatei*8 as inflatek
+		if inflatek>inflateleft
+			ret inflatebad
+		end
+		inflateleft-=inflatek
+		load inflatecount+inflatei*8-8 as inflatek
+		inflatecode=inflatecode+inflatek<<1
+		store inflatenext+inflatei*8 inflatecode
+		inflatei+=1
+	end
+	inflatesize=1<<inflatetb
+	inflatei=0
+	while inflatei<inflatesize*2
+		store inflatet+inflatei 0
+		inflatei+=8
+	end
+	inflates=0
+	while inflates<inflaten
+		loadb inflatel+inflates as inflatec
+		if inflatec
+			load inflatenext+inflatec*8 as inflatecode
+			store inflatenext+inflatec*8 inflatecode+1
+			# the code is in the data from its highest bit on
+			inflater=0
+			inflatek=inflatec
+			while inflatek
+				inflater=inflater<<1|(inflatecode&1)
+				inflatecode>>=1
+				inflatek-=1
+			end
+			inflatee=inflates<<4|inflatec
+			inflatek=1<<inflatec
+			while inflater<inflatesize
+				store2 inflatet+inflater*2 inflatee
+				inflater+=inflatek
+			end
+		end
+		inflates+=1
+	end
+	ret 0
+end
+
+fn inflate inflatep inflaten inflateb inflatemax
+	local inflatelit 65536
+	local inflatedist 65536
+	local inflateclen 256
+	local inflatelens 320
+	load inflateb+8 as inflatestart
+	call byneed inflateb 65536 as inflatew
+	ifz inflatew
+		ret inflatemem
+	end
+	load inflateb as inflateout
+	load inflateb+16 as inflatecap
+	inflateoutn=inflatestart
+	inflatelimit=inflatestart+inflatemax
+	if inflatelimit<inflatestart
+		inflatelimit=-1
+	end
+	inflatepos=0
+	inflatehold=0
+	inflatebits=0
+	# 1 while the tables are those of the fixed codes
+	inflatefixed=0
+	label block
+	if inflatepos+8<=inflaten
+		load inflatep+inflatepos as inflatew
+		inflatehold|=inflatew<<inflatebits
+		inflatew=63-inflatebits>>3
+		inflatepos+=inflatew
+		inflatebits+=inflatew*8
+	else
+		while (inflatebits<=56)&(inflatepos<inflaten)
+			loadb inflatep+inflatepos as inflatew
+			inflatehold|=inflatew<<inflatebits
+			inflatepos+=1
+			inflatebits+=8
+		end
+	end
+	jlt inflatebits 3 fail
+	inflatelast=inflatehold&1
+	inflatetype=inflatehold>>1&3
+	inflatehold>>=3
+	inflatebits-=3
+	jeq inflatetype 0 stored
+	jeq inflatetype 3 fail
+	if inflatetype==1
+		ifz inflatefixed
+			inflatei=0
+			while inflatei<288
+				inflatek=8
+				if (inflatei>143)&(inflatei<256)
+					inflatek=9
+				end
+				if (inflatei>255)&(inflatei<280)
+					inflatek=7
+				end
+				storeb inflatelens+inflatei inflatek
+				inflatei+=1
+			end
+			call inflatetable inflatelens 288 inflatelit 15
+			inflatei=0
+			while inflatei<30
+				storeb inflatelens+inflatei 5
+				inflatei+=1
+			end
+			call inflatetable inflatelens 30 inflatedist 15
+			inflatefixed=1
+		end
+	else
+		inflatefixed=0
+		jlt inflatebits 14 fail
+		inflatehlit=(inflatehold&31)+257
+		inflatehdist=(inflatehold>>5&31)+1
+		inflatehclen=(inflatehold>>10&15)+4
+		inflatehold>>=14
+		inflatebits-=14
+		if (inflatehlit>286)|(inflatehdist>30)
+			jmp fail
+		end
+		inflatei=0
+		while inflatei<19
+			storeb inflatelens+inflatei 0
+			inflatei+=1
+		end
+		inflatei=0
+		while inflatei<inflatehclen
+			if inflatepos+8<=inflaten
+				load inflatep+inflatepos as inflatew
+				inflatehold|=inflatew<<inflatebits
+				inflatew=63-inflatebits>>3
+				inflatepos+=inflatew
+				inflatebits+=inflatew*8
+			else
+				while (inflatebits<=56)&(inflatepos<inflaten)
+					loadb inflatep+inflatepos as inflatew
+					inflatehold|=inflatew<<inflatebits
+					inflatepos+=1
+					inflatebits+=8
+				end
+			end
+			jlt inflatebits 3 fail
+			loadb inflateorder+inflatei as inflatek
+			storeb inflatelens+inflatek inflatehold&7
+			inflatehold>>=3
+			inflatebits-=3
+			inflatei+=1
+		end
+		call inflatetable inflatelens 19 inflateclen 7 as inflatew
+		jnz inflatew fail
+		# the lengths of both codes, one run
+		inflatetotal=inflatehlit+inflatehdist
+		inflatei=0
+		inflateprev=0
+		label cl
+		if inflatei<inflatetotal
+			if inflatepos+8<=inflaten
+				load inflatep+inflatepos as inflatew
+				inflatehold|=inflatew<<inflatebits
+				inflatew=63-inflatebits>>3
+				inflatepos+=inflatew
+				inflatebits+=inflatew*8
+			else
+				while (inflatebits<=56)&(inflatepos<inflaten)
+					loadb inflatep+inflatepos as inflatew
+					inflatehold|=inflatew<<inflatebits
+					inflatepos+=1
+					inflatebits+=8
+				end
+			end
+			load2 inflateclen+(inflatehold&127)*2 as inflatee
+			inflatek=inflatee&15
+			if (inflatek==0)|(inflatek>inflatebits)
+				jmp fail
+			end
+			inflatehold>>=inflatek
+			inflatebits-=inflatek
+			inflates=inflatee>>4
+			if inflates<16
+				storeb inflatelens+inflatei inflates
+				inflatei+=1
+				inflateprev=inflates
+				jmp cl
+			end
+			# 16: the length before, 3 to 6 times; 17 and 18: no code,
+			# 3 to 10 and 11 to 138 times
+			inflatek=7
+			inflater=11
+			if inflates==16
+				jz inflatei fail
+				inflatek=2
+				inflater=3
+			else
+				inflateprev=0
+				if inflates==17
+					inflatek=3
+					inflater=3
+				end
+			end
+			jlt inflatebits inflatek fail
+			inflater+=inflatehold&((1<<inflatek)-1)
+			inflatehold>>=inflatek
+			inflatebits-=inflatek
+			if inflatei+inflater>inflatetotal
+				jmp fail
+			end
+			while inflater
+				storeb inflatelens+inflatei inflateprev
+				inflatei+=1
+				inflater-=1
+			end
+			jmp cl
+		end
+		loadb inflatelens+256 as inflatek
+		jz inflatek fail
+		call inflatetable inflatelens inflatehlit inflatelit 15 as inflatew
+		jnz inflatew fail
+		call inflatetable inflatelens+inflatehlit inflatehdist inflatedist 15 as inflatew
+		jnz inflatew fail
+	end
+	# a literal, the end of the block, or a length and a distance: 48
+	# bits at most, which one filling has
+	label sym
+	if inflatepos+8<=inflaten
+		load inflatep+inflatepos as inflatew
+		inflatehold|=inflatew<<inflatebits
+		inflatew=63-inflatebits>>3
+		inflatepos+=inflatew
+		inflatebits+=inflatew*8
+	else
+		while (inflatebits<=56)&(inflatepos<inflaten)
+			loadb inflatep+inflatepos as inflatew
+			inflatehold|=inflatew<<inflatebits
+			inflatepos+=1
+			inflatebits+=8
+		end
+	end
+	load2 inflatelit+(inflatehold&32767)*2 as inflatee
+	inflatek=inflatee&15
+	if (inflatek==0)|(inflatek>inflatebits)
+		jmp fail
+	end
+	inflatehold>>=inflatek
+	inflatebits-=inflatek
+	inflates=inflatee>>4
+	if inflates<256
+		jge inflateoutn inflatelimit big
+		if inflateoutn>=inflatecap
+			store inflateb+8 inflateoutn
+			call byneed inflateb 65536 as inflatew
+			jz inflatew nomem
+			load inflateb as inflateout
+			load inflateb+16 as inflatecap
+		end
+		storeb inflateout+inflateoutn inflates
+		inflateoutn+=1
+		jmp sym
+	end
+	jeq inflates 256 blockend
+	inflates-=257
+	jgt inflates 28 fail
+	loadb inflatelext+inflates as inflatek
+	load2 inflatelbase+inflates*2 as inflatelen
+	jlt inflatebits inflatek fail
+	inflatelen+=inflatehold&((1<<inflatek)-1)
+	inflatehold>>=inflatek
+	inflatebits-=inflatek
+	load2 inflatedist+(inflatehold&32767)*2 as inflatee
+	inflatek=inflatee&15
+	if (inflatek==0)|(inflatek>inflatebits)
+		jmp fail
+	end
+	inflatehold>>=inflatek
+	inflatebits-=inflatek
+	inflates=inflatee>>4
+	jgt inflates 29 fail
+	loadb inflatedext+inflates as inflatek
+	load2 inflatedbase+inflates*2 as inflated
+	jlt inflatebits inflatek fail
+	inflated+=inflatehold&((1<<inflatek)-1)
+	inflatehold>>=inflatek
+	inflatebits-=inflatek
+	jgt inflated inflateoutn-inflatestart fail
+	jgt inflateoutn+inflatelen inflatelimit big
+	if inflateoutn+inflatelen>inflatecap
+		store inflateb+8 inflateoutn
+		call byneed inflateb 65536 as inflatew
+		jz inflatew nomem
+		load inflateb as inflateout
+		load inflateb+16 as inflatecap
+	end
+	# a byte at a time: the bytes copied may be those just written
+	inflater=inflateout+inflateoutn
+	inflatei=0
+	while inflatei<inflatelen
+		loadb inflater+inflatei-inflated as inflatec
+		storeb inflater+inflatei inflatec
+		inflatei+=1
+	end
+	inflateoutn+=inflatelen
+	jmp sym
+	# a block that is not packed: the bits up to the next byte are
+	# dropped, then its length twice, the second time with every bit
+	# turned, and its bytes
+	label stored
+	inflatek=inflatebits&7
+	inflatehold>>=inflatek
+	inflatebits-=inflatek
+	jlt inflatebits 32 fail
+	inflatelen=inflatehold&0xffff
+	if inflatelen^0xffff!=inflatehold>>16&0xffff
+		jmp fail
+	end
+	inflatebits-=32
+	inflatepos-=inflatebits>>3
+	inflatebits=0
+	inflatehold=0
+	jgt inflatelen inflaten-inflatepos fail
+	jgt inflateoutn+inflatelen inflatelimit big
+	if inflateoutn+inflatelen>inflatecap
+		store inflateb+8 inflateoutn
+		call byneed inflateb 65536 as inflatew
+		jz inflatew nomem
+		load inflateb as inflateout
+		load inflateb+16 as inflatecap
+	end
+	call bycopy inflateout+inflateoutn inflatep+inflatepos inflatelen
+	inflateoutn+=inflatelen
+	inflatepos+=inflatelen
+	label blockend
+	jz inflatelast block
+	store inflateb+8 inflateoutn
+	ret inflatepos-(inflatebits>>3)
+	label fail
+	store inflateb+8 inflatestart
+	ret inflatebad
+	label big
+	store inflateb+8 inflatestart
+	ret inflatebig
+	label nomem
+	store inflateb+8 inflatestart
+	ret inflatemem
+end
+
+# the Adler-32 of the inflaten bytes at inflatep
+fn inflateadler inflatep inflaten
+	inflatea=1
+	inflates=0
+	while inflaten
+		# 5552 bytes are the most whose sums stay below 32 bits
+		inflatek=inflaten
+		if inflatek>5552
+			inflatek=5552
+		end
+		inflaten-=inflatek
+		while inflatek
+			loadb inflatep as inflatec
+			inflatea+=inflatec
+			inflates+=inflatea
+			inflatep+=1
+			inflatek-=1
+		end
+		inflatea%=65521
+		inflates%=65521
+	end
+	ret inflates<<16|inflatea
+end
+
+fn inflatezlib inflatep inflaten inflateb inflatemax
+	if inflaten<6
+		ret inflatebad
+	end
+	loadb inflatep as inflatec
+	loadb inflatep+1 as inflatef
+	# the method 8 with a window of 32 KiB at most, the two bytes a
+	# multiple of 31, no dictionary
+	if (inflatec&15!=8)|(inflatec>>4>7)|((inflatec*256+inflatef)%31!=0)|(inflatef&32!=0)
+		ret inflatebad
+	end
+	load inflateb+8 as inflatestart
+	call inflate inflatep+2 inflaten-2 inflateb inflatemax as inflater
+	ifslt inflater 0
+		ret inflater
+	end
+	load inflateb as inflateout
+	load inflateb+8 as inflateoutn
+	if inflater+6>inflaten
+		store inflateb+8 inflatestart
+		ret inflatebad
+	end
+	call inflateadler inflateout+inflatestart inflateoutn-inflatestart as inflatea
+	inflateq=inflatep+2+inflater
+	loadb inflateq as inflates
+	loadb inflateq+1 as inflatec
+	inflates=inflates<<8|inflatec
+	loadb inflateq+2 as inflatec
+	inflates=inflates<<8|inflatec
+	loadb inflateq+3 as inflatec
+	inflates=inflates<<8|inflatec
+	if inflates!=inflatea
+		store inflateb+8 inflatestart
+		ret inflatebad
+	end
+	ret inflateoutn-inflatestart
+end
