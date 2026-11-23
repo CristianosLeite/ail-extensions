@@ -28,6 +28,8 @@ CODE=/path/to/code SHOW=50 make check   # another program of the editor, more wr
 code --extensionDevelopmentPath="$PWD/editors/vscode" <an AIL checkout>   # try the extension without installing it
 ```
 
+A pull request to `main` runs both on GitHub (`.github/workflows/test.yml`), and nothing else starts it: `make test` with the command of the release of AIL that the line `ail` of `Ailfile` asks for, its archive checked against its `.sha256`, and `make check` with the newest stable VS Code, fetched as an archive and named by `CODE`.
+
 ## editors/vscode
 
 The VS Code extension for `.aiw` files, plain JavaScript with no build step and no dependency: a grammar (`syntaxes/ail.tmLanguage.json`), folding by the rules of `dtkind` and `dtstrend` of `tools/lib/dent.aiw` of the main repository, written again in `extension.js` (a depth counted from the first word of each line: a word that opens a block, `else` or `end`, only when a blank, a comment or the end of the line follows, so `if=1` is an assignment; the lines inside a string that spans lines are left alone), and Format Document, which pipes the text through `build/tools/indent -` of the workspace folder of the file (the setting `ail.indentPath` names another place). A new block statement of the language is added to `extension.js`, the grammar and `language-configuration.json`, after `tools/lib/dent.aiw` there.
