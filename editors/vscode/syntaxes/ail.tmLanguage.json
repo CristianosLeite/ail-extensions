@@ -76,7 +76,7 @@
       ]
     },
     "sys": {
-      "match": "^[ \\t]*(sys)(?=[ \\t\\r#]|$)(?:[ \\t]+([a-z][a-z0-9_]*))?",
+      "match": "^[ \\t]*(sys|rt)(?=[ \\t\\r#]|$)(?:[ \\t]+([a-z][a-z0-9_]*))?",
       "captures": {
         "1": { "name": "keyword.other.ail" },
         "2": { "name": "support.function.ail" }
@@ -91,7 +91,7 @@
       "captures": { "1": { "name": "storage.type.ail" } }
     },
     "statement": {
-      "match": "^[ \\t]*(set|add|sub|mul|div|mod|and|or|xor|shl|shr|sdiv|smod|sar|eq|ne|lt|le|gt|ge|slt|sle|sgt|sge|fadd|fsub|fmul|fdiv|fsqrt|itof|ftoi|flt|fle|feq|fsum|fdot4|fdot|f4to8|f8to4|padd|psub|pmul|pdiv|pmadd|xadd|cas|alloc|free|len|at|load|load4|load2|loadb|store|store4|store2|storeb|callp)(?=[ \\t\\r#]|$)",
+      "match": "^[ \\t]*(set|add|sub|mul|div|mod|and|or|xor|shl|shr|sdiv|smod|sar|eq|ne|lt|le|gt|ge|slt|sle|sgt|sge|fadd|fsub|fmul|fdiv|fsqrt|itof|ftoi|flt|fle|feq|fsum|fdot4|fdot|f4to8|f8to4|padd|psub|pmul|pdiv|pmadd|xadd|cas|alloc|free|len|at|load|load4|load2|loadb|store|store4|store2|storeb|callp|ccall|base|zero|stack)(?=[ \\t\\r#]|$)",
       "captures": { "1": { "name": "keyword.other.ail" } }
     },
     "as": {

@@ -6,7 +6,7 @@ It reads; it draws nothing and writes no PDF. It gives the text that the content
 
 ## Using it
 
-It needs AIL 0.1.1 or later. A program names the package of this repository as a dependency and reads one file of it:
+It needs AIL 0.2.0 or later, the version `Ailfile` asks for. A program names the package of this repository as a dependency and reads one file of it:
 
 ```
 use "lib/std/io.aiw"

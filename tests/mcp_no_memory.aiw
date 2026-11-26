@@ -107,6 +107,13 @@ while n>=4096
 	end
 	n>>=4
 end
+# and the blocks of the size a response starts with, which is a size of
+# its own in the runtime: some of them were freed and are kept
+label room
+alloc 4096 as p
+if p
+	jmp room
+end
 call say "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}"
 call asynctimeout sv 3000 as g
 await g as r

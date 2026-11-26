@@ -16,7 +16,7 @@ It is the server side and tools only: `initialize`, `ping`, `tools/list` and `to
 
 ## Using it
 
-It needs AIL 0.1.1 or later, the first version with `lib/std/json.aiw` and `lib/std/num.aiw`, which `Ailfile` asks for. A program names the package of this repository in its `Ailfile` (`ail add --path <the top of this repository>`, or its address and a version once one is tagged) and:
+It needs `lib/std/json.aiw` and `lib/std/num.aiw`, which AIL has since its version 0.1.1; `Ailfile` asks for AIL 0.2.0, the version the package is tested with. A program names the package of this repository in its `Ailfile` (`ail add --path <the top of this repository>`, or its address and a version once one is tagged) and:
 
 ```
 use "lib/std/io.aiw"
